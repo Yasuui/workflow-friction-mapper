@@ -19,7 +19,7 @@ Use the selected **Flow path** mark: three connected workflow nodes resolving in
 Use Next.js metadata file conventions so assets are part of the application build:
 
 - `app/icon.svg` for the scalable browser favicon.
-- `app/apple-icon.svg` for saved mobile shortcuts.
+- `app/apple-icon.tsx` for a generated PNG used by saved mobile shortcuts.
 - `app/opengraph-image.tsx` for a 1200 by 630 share card generated with Next.js `ImageResponse`.
 - Complete `metadataBase`, canonical URL, Open Graph, and X card metadata in the root layout.
 

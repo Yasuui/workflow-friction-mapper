@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Workflow Friction Mapper</title>
+  <rect width="64" height="64" rx="18" fill="#151515"/>
+  <path d="M15 18h12c8 0 12 5 12 13v3c0 8 4 12 12 12" fill="none" stroke="#f5f4ef" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="15" cy="18" r="5" fill="#4d7eff"/>
+  <circle cx="39" cy="32" r="5" fill="#4d7eff"/>
+  <circle cx="51" cy="46" r="5" fill="#4d7eff"/>
+</svg>

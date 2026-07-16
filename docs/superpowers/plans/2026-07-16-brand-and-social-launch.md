@@ -26,7 +26,7 @@
 - Modify: `tests/vercel-readiness.test.mjs`
 - Create: `components/FlowMark.tsx`
 - Create: `app/icon.svg`
-- Create: `app/apple-icon.svg`
+- Create: `app/apple-icon.tsx`
 - Create: `app/opengraph-image.tsx`
 - Modify: `app/layout.tsx`
 - Modify: `components/WorkflowStudio.tsx`
@@ -38,7 +38,7 @@
 
 - [ ] **Step 1: Add failing metadata and brand tests**
 
-Add assertions that read `app/layout.tsx`, `app/opengraph-image.tsx`, `app/icon.svg`, `app/apple-icon.svg`, and `components/FlowMark.tsx`. Require `metadataBase`, `alternates.canonical`, `openGraph`, `twitter`, `summary_large_image`, `FlowMark`, and three SVG circles.
+Add assertions that read `app/layout.tsx`, `app/opengraph-image.tsx`, `app/icon.svg`, `app/apple-icon.tsx`, and `components/FlowMark.tsx`. Require `metadataBase`, `alternates.canonical`, `openGraph`, `twitter`, `summary_large_image`, `FlowMark`, and three SVG circles.
 
 - [ ] **Step 2: Run the focused tests and confirm RED**
 
@@ -64,9 +64,9 @@ export function FlowMark({ className, label }: { className?: string; label?: str
 }
 ```
 
-- [ ] **Step 4: Add favicon and mobile icon SVGs**
+- [ ] **Step 4: Add favicon and generated mobile icon**
 
-Use the same 32 by 32 geometry, ink rounded-square background, warm-white path, and blue nodes. Include a readable `<title>Workflow Friction Mapper</title>` in each asset.
+Use the same 32 by 32 geometry, ink rounded-square background, warm-white path, and blue nodes. Include a readable `<title>Workflow Friction Mapper</title>` in the SVG and return a 180 by 180 PNG from the Apple icon route.
 
 - [ ] **Step 5: Add complete root metadata**
 
@@ -195,7 +195,7 @@ Expected: status `Ready` and alias `https://workflow-friction-mapper.vercel.app`
 
 - [ ] **Step 3: Verify live metadata and assets**
 
-Request `/`, `/icon.svg`, `/apple-icon.svg`, and `/opengraph-image`; confirm HTTP 200, canonical URL, Open Graph tags, and X card tags.
+Request `/`, `/icon.svg`, `/apple-icon`, and `/opengraph-image`; confirm HTTP 200, canonical URL, Open Graph tags, and X card tags.
 
 - [ ] **Step 4: Repeat the core live browser flow**
 

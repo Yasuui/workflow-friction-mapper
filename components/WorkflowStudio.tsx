@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useRef, useState } from "react";
+import { FlowMark } from "@/components/FlowMark";
 import { analyzeWorkflow, type Sensitivity, type WorkflowInput, type WorkflowReport } from "@/lib/workflow-analysis";
 
 const initialInput: WorkflowInput = { description: "", minutesPerRun: 20, runsPerWeek: 5, handoffs: 2, sensitivity: "internal" };
@@ -137,7 +138,7 @@ export function WorkflowStudio() {
       <div className="ambient ambient-one" aria-hidden="true" />
       <div className="ambient ambient-two" aria-hidden="true" />
       <nav className="nav-wrap" aria-label="Primary navigation">
-        <a className="wordmark" href="#top"><span className="mark" aria-hidden="true">WF</span><span>Workflow Friction Mapper</span></a>
+        <a className="wordmark" href="#top"><span className="mark" aria-hidden="true"><FlowMark /></span><span>Workflow Friction Mapper</span></a>
         <a className="nav-link" href="#how-it-works">How it works</a>
       </nav>
 
@@ -229,7 +230,7 @@ export function WorkflowStudio() {
           <a href="https://cal.com/yonis-diriye" target="_blank" rel="noreferrer">Book a conversation <span aria-hidden="true">↗</span></a>
         </div>
       </section>
-      <footer><span>Workflow Friction Mapper</span><span>Private by design · © {new Date().getFullYear()} Yonis Diriye</span></footer>
+      <footer><span className="footer-brand"><FlowMark /> Workflow Friction Mapper</span><span>Private by design · © {new Date().getFullYear()} Yonis Diriye</span></footer>
     </main>
   );
 }

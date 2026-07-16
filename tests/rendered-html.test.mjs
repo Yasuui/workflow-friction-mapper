@@ -43,3 +43,42 @@ test("keeps analysis local and removes the disposable starter", async () => {
   await assert.rejects(access(previewRoot));
   await assert.rejects(access(new URL("public/_sites-preview", templateRoot)));
 });
+
+test("defines one consistent brand and complete social metadata", async () => {
+  async function source(path) {
+    try {
+      return await readFile(new URL(path, import.meta.url), "utf8");
+    } catch {
+      return "";
+    }
+  }
+
+  const [layout, studio, mark, icon, appleIcon, socialImage] = await Promise.all([
+    source("../app/layout.tsx"),
+    source("../components/WorkflowStudio.tsx"),
+    source("../components/FlowMark.tsx"),
+    source("../app/icon.svg"),
+    source("../app/apple-icon.tsx"),
+    source("../app/opengraph-image.tsx"),
+  ]);
+
+  assert.match(layout, /metadataBase/);
+  assert.match(layout, /workflow-friction-mapper\.vercel\.app/);
+  assert.match(layout, /canonical/);
+  assert.match(layout, /openGraph/);
+  assert.match(layout, /twitter/);
+  assert.match(layout, /summary_large_image/);
+  assert.match(studio, /<FlowMark/);
+  assert.match(mark, /export function FlowMark/);
+  assert.equal((mark.match(/<circle/g) ?? []).length, 3);
+  assert.match(icon, /Workflow Friction Mapper/);
+  assert.equal((icon.match(/<circle/g) ?? []).length, 3);
+  assert.match(appleIcon, /ImageResponse/);
+  assert.match(appleIcon, /180/);
+  assert.match(appleIcon, /Workflow Friction Mapper/);
+  assert.match(socialImage, /ImageResponse/);
+  assert.match(socialImage, /1200/);
+  assert.match(socialImage, /630/);
+  assert.match(socialImage, /Find the friction before you automate/);
+  assert.match(socialImage, /Private, browser-local workflow analysis/);
+});
