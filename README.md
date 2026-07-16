@@ -2,7 +2,7 @@
 
 A private, browser-only tool that turns one manual workflow into a clear map of friction, automation opportunities, safeguards, and the next best move.
 
-**[Open the live tool](https://workflow-friction-mapper.yonis-d.chatgpt.site)**
+**[Open the live tool](https://workflow-friction-mapper.vercel.app)**
 
 Built by [Yonis Diriye](https://www.linkedin.com/in/yonisdiriye/) as a practical demonstration of AI automation thinking, workflow design, privacy-aware product development, and full-stack execution.
 
@@ -76,7 +76,7 @@ Safeguards + recommended first pilot
 Copy or download locally
 ```
 
-Core stack: Next.js, React, TypeScript, Vinext, and Cloudflare-compatible deployment tooling.
+Core stack: Next.js, React, TypeScript, Tailwind CSS, and Vercel.
 
 ## Connect
 
