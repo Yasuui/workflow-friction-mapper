@@ -1,8 +1,10 @@
 # Workflow Friction Mapper
 
+![Workflow Friction Mapper — Find the friction before you automate](docs/screenshots/social-card.png)
+
 A private, browser-only tool that turns one manual workflow into a clear map of friction, automation opportunities, safeguards, and the next best move.
 
-**[Open the live tool](https://workflow-friction-mapper.vercel.app)**
+**[Open the live tool](https://workflow-friction-mapper.vercel.app)** · **[View the source](https://github.com/Yasuui/workflow-friction-mapper)**
 
 Built by [Yonis Diriye](https://www.linkedin.com/in/yonisdiriye/) as a practical demonstration of AI automation thinking, workflow design, privacy-aware product development, and full-stack execution.
 
@@ -17,6 +19,34 @@ Workflow Friction Mapper provides a lightweight first assessment. It helps a use
 - identify bounded automation opportunities;
 - add safeguards before scale; and
 - choose one measurable pilot instead of attempting a risky rewrite.
+
+## How it works
+
+1. **Describe:** enter a sanitized trigger, ordered steps, decisions, handoffs, completion state, time, and frequency.
+2. **Map:** a deterministic browser-local engine turns the description into an ordered workflow.
+3. **Explain:** the report shows calculated time, directional friction and automation-fit signals, input confidence, and the factors behind each result.
+4. **Improve:** workflow-specific fixes are prioritized alongside safeguards and a bounded first pilot.
+5. **Validate:** the report defines checks for cycle time, exceptions, rework, and output quality across real runs.
+
+The tool does not call an AI model or send workflow text to a server. It is designed to improve the first automation conversation—not replace process owners, security review, or measured validation.
+
+## Product views
+
+### One-step workflow input
+
+![One-step workflow input](docs/screenshots/landing.png)
+
+### Transparent KPI report
+
+![Transparent KPI report](docs/screenshots/report.png)
+
+### Prioritized fixes and safer first move
+
+![Prioritized workflow fixes](docs/screenshots/fixes.png)
+
+### Direct contact and source actions
+
+![Contact and source actions](docs/screenshots/contact.png)
 
 ## Privacy by design
 
@@ -45,7 +75,7 @@ The report is deterministic and runs in the browser. See [PRIVACY.md](PRIVACY.md
 ## How to interpret accuracy
 
 - **Calculated:** annual manual time is direct arithmetic from the entered minutes and weekly frequency.
-- **Directional:** friction, automation fit, and potential reclaimed time are transparent heuristics—not predictions or audit findings.
+- **Directional heuristic:** friction, automation fit, and potential reclaimed time are transparent heuristics—not predictions or audit findings.
 - **Input confidence:** the report checks for a trigger, ordered steps, a completion state, time, and frequency. Weak input receives a low-confidence warning and specific correction prompts.
 - **Validation required:** users should compare cycle time, exceptions, and output quality across 10–20 real runs before making a business case.
 

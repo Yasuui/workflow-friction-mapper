@@ -28,3 +28,17 @@ test("removes the unused hosting and API starter surfaces", async () => {
     await assert.rejects(access(new URL(path, root)));
   }
 });
+
+test("documents the live product with branded visual evidence", async () => {
+  const readme = await readFile(new URL("README.md", root), "utf8");
+
+  assert.match(readme, /https:\/\/workflow-friction-mapper\.vercel\.app/);
+  assert.match(readme, /docs\/screenshots\/social-card\.png/);
+  assert.match(readme, /docs\/screenshots\/landing\.png/);
+  assert.match(readme, /docs\/screenshots\/report\.png/);
+  assert.match(readme, /docs\/screenshots\/fixes\.png/);
+  assert.match(readme, /docs\/screenshots\/contact\.png/);
+  assert.match(readme, /## How it works/);
+  assert.match(readme, /Directional heuristic/);
+  assert.match(readme, /No workflow text leaves the browser/);
+});
