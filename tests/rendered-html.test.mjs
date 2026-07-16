@@ -11,6 +11,8 @@ test("pre-renders the workflow analyzer product shell", async () => {
   assert.match(html, /Find the friction before you automate/);
   assert.match(html, /Describe one workflow/);
   assert.match(html, /Analysis stays on this device/);
+  assert.match(html, /Start with a trigger/);
+  assert.match(html, /Paste or type/);
   assert.match(html, /Connect on LinkedIn/);
   assert.match(html, /View the source/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
@@ -31,6 +33,9 @@ test("keeps analysis local and removes the disposable starter", async () => {
   assert.doesNotMatch(studio, /fetch\(|XMLHttpRequest|localStorage|sessionStorage/);
   assert.doesNotMatch(analysis, /fetch\(|XMLHttpRequest/);
   assert.match(studio, /do not enter personal, confidential, regulated/i);
+  assert.match(studio, /Prioritized fixes/);
+  assert.match(studio, /Why these scores/);
+  assert.match(studio, /How to validate impact/);
 
   await assert.rejects(access(previewRoot));
   await assert.rejects(access(new URL("public/_sites-preview", templateRoot)));

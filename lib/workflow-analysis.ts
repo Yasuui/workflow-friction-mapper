@@ -24,6 +24,8 @@ export interface WorkflowReport {
   summary: string;
   steps: string[];
   opportunities: AutomationOpportunity[];
+  scoreDrivers: string[];
+  validationChecks: string[];
   safeguards: string[];
   firstMove: string;
 }
@@ -161,7 +163,7 @@ export function analyzeWorkflow(input: WorkflowInput): WorkflowReport {
     input.sensitivity === "sensitive" ? 12 : input.sensitivity === "internal" ? 5 : 0;
 
   const frictionScore = clamp(
-    18 + input.handoffs * 9 + volumePressure + matchedSignals * 6 + sensitivityPressure,
+    10 + input.handoffs * 8 + volumePressure + matchedSignals * 4 + sensitivityPressure,
   );
   const automationReadiness = clamp(
     42 + matchedSignals * 8 - input.handoffs * 2 - sensitivityPressure / 2,
@@ -206,6 +208,23 @@ export function analyzeWorkflow(input: WorkflowInput): WorkflowReport {
 
   const steps = extractSteps(description);
   const firstOpportunity = opportunities[0];
+  const scoreDrivers = [
+    `${input.minutesPerRun} minutes × ${input.runsPerWeek} runs per week equals about ${annualManualHours} manual hours per year.`,
+    `${input.handoffs} handoff${input.handoffs === 1 ? "" : "s"} can add waiting, ownership gaps, or rework.`,
+    `${matchedSignals} repeatable automation signal${matchedSignals === 1 ? " was" : "s were"} found in the workflow description.`,
+  ];
+
+  if (input.sensitivity !== "public") {
+    scoreDrivers.push(
+      `${input.sensitivity === "sensitive" ? "Sensitive" : "Internal"} data increases the need for approved tools, minimum fields, and review gates.`,
+    );
+  }
+
+  const validationChecks = [
+    "Measure median cycle time for 10–20 runs before and after the pilot.",
+    "Count exceptions, rework, and missed handoffs; automation should reduce, not hide, them.",
+    "Review a sample of outputs with the process owner and record clear pass/fail criteria.",
+  ];
 
   return {
     frictionScore,
@@ -213,10 +232,12 @@ export function analyzeWorkflow(input: WorkflowInput): WorkflowReport {
     annualManualHours,
     potentialHoursReclaimed,
     estimateNote:
-      "Illustrative estimate based only on the time and frequency you entered; validate it with a measured baseline.",
+      "Illustrative, directional scenario based only on the time and frequency entered—not a forecast. Validate every estimate with a measured baseline.",
     summary: `This workflow shows ${frictionScore >= 70 ? "high" : frictionScore >= 45 ? "meaningful" : "manageable"} friction and ${automationReadiness >= 65 ? "strong" : "developing"} automation readiness. Focus first on a bounded step with clear inputs, ownership, and review.`,
     steps: steps.length > 0 ? steps : ["Describe the current workflow"],
     opportunities,
+    scoreDrivers,
+    validationChecks,
     safeguards,
     firstMove: `Start with ${firstOpportunity.title.toLowerCase()}. Run it beside the current process, measure exceptions, and expand only after the result is reliable.`,
   };

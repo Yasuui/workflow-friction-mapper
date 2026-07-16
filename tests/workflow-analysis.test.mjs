@@ -36,6 +36,10 @@ test("analyzeWorkflow keeps scores and estimates within explainable bounds", () 
   assert.ok(report.potentialHoursReclaimed > 0);
   assert.ok(report.potentialHoursReclaimed <= report.annualManualHours);
   assert.match(report.estimateNote, /illustrative/i);
+  assert.ok(report.scoreDrivers.some((driver) => /handoff/i.test(driver)));
+  assert.ok(report.scoreDrivers.some((driver) => /hours|minutes/i.test(driver)));
+  assert.equal(report.validationChecks.length, 3);
+  assert.ok(report.validationChecks.some((check) => /cycle time/i.test(check)));
 });
 
 test("analyzeWorkflow detects workflow-specific automation candidates", () => {
@@ -47,6 +51,7 @@ test("analyzeWorkflow detects workflow-specific automation candidates", () => {
   assert.ok(ids.includes("reminder-routing"));
   assert.ok(ids.includes("case-monitoring"));
   assert.match(report.firstMove, /start/i);
+  assert.match(report.firstMove, /measure/i);
 });
 
 test("analyzeWorkflow adds strict safeguards for sensitive inputs", () => {

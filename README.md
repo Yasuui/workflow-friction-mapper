@@ -31,12 +31,13 @@ The report is deterministic and runs in the browser. See [PRIVACY.md](PRIVACY.md
 
 ## What the report includes
 
-- Friction score and automation-readiness signal
+- Directional friction and automation-fit signals with visible score drivers
 - Illustrative annual manual hours and potential reclaimed time
 - Ordered workflow map
-- Context-aware automation opportunities
+- Prioritized fixes matched to the described workflow
 - Data and human-review safeguards
 - Recommended first pilot
+- Three checks to validate cycle time, exceptions, and output quality
 - Local copy and Markdown download actions
 
 > Time estimates are illustrative. They use only the frequency and duration entered by the user and should be validated against a measured baseline.
