@@ -1,15 +1,11 @@
 import type { Metadata } from "next";
-import { SkeletonPreview } from "./_sites-preview/SkeletonPreview";
+import { WorkflowStudio } from "@/components/WorkflowStudio";
 
 export const metadata: Metadata = {
-  title: "Your site is taking shape",
-  description:
-    "Codex is building the first version. It’ll appear here automatically when it’s ready.",
-  other: {
-    "codex-preview": "development",
-  },
+  title: "Workflow Friction Mapper",
+  description: "Map a manual workflow and find a safer first automation — entirely in your browser.",
 };
 
 export default function Home() {
-  return <SkeletonPreview />;
+  return <WorkflowStudio />;
 }
