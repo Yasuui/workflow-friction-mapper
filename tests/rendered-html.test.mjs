@@ -36,6 +36,9 @@ test("keeps analysis local and removes the disposable starter", async () => {
   assert.match(studio, /Prioritized fixes/);
   assert.match(studio, /Why these scores/);
   assert.match(studio, /How to validate impact/);
+  assert.match(studio, /Input confidence/);
+  assert.match(studio, /Higher means more recurring effort/i);
+  assert.match(studio, /directional heuristic/i);
 
   await assert.rejects(access(previewRoot));
   await assert.rejects(access(new URL("public/_sites-preview", templateRoot)));

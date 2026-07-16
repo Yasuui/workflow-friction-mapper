@@ -40,6 +40,8 @@ test("analyzeWorkflow keeps scores and estimates within explainable bounds", () 
   assert.ok(report.scoreDrivers.some((driver) => /hours|minutes/i.test(driver)));
   assert.equal(report.validationChecks.length, 3);
   assert.ok(report.validationChecks.some((check) => /cycle time/i.test(check)));
+  assert.equal(report.inputConfidence, "High");
+  assert.ok(report.inputQualityScore >= 75);
 });
 
 test("analyzeWorkflow detects workflow-specific automation candidates", () => {
@@ -78,4 +80,37 @@ test("analyzeWorkflow returns useful generic candidates when no keyword matches"
   assert.ok(report.opportunities.length >= 3);
   assert.ok(report.steps.length >= 1);
   assert.ok(report.summary.length > 40);
+});
+
+test("analyzeWorkflow does not overstate accuracy for vague or random input", () => {
+  const report = analyzeWorkflow({
+    description: "Do stuff",
+    minutesPerRun: 0,
+    runsPerWeek: 0,
+    handoffs: 0,
+    sensitivity: "public",
+  });
+
+  assert.equal(report.inputConfidence, "Low");
+  assert.ok(report.inputQualityScore < 50);
+  assert.match(report.summary, /low input confidence/i);
+  assert.ok(report.inputImprovements.some((item) => /trigger|starts/i.test(item)));
+  assert.ok(report.inputImprovements.some((item) => /ordered steps/i.test(item)));
+  assert.ok(report.inputImprovements.some((item) => /minutes/i.test(item)));
+});
+
+test("friction rises with volume and handoffs while sensitive data lowers reclaim scenarios", () => {
+  const base = {
+    description: "When a request arrives, review the fields. Then assign an owner. Finally close the request after confirmation.",
+    minutesPerRun: 10,
+    runsPerWeek: 5,
+    handoffs: 1,
+    sensitivity: "public",
+  };
+  const lowFriction = analyzeWorkflow(base);
+  const highFriction = analyzeWorkflow({ ...base, minutesPerRun: 40, handoffs: 5 });
+  const sensitive = analyzeWorkflow({ ...base, sensitivity: "sensitive" });
+
+  assert.ok(highFriction.frictionScore > lowFriction.frictionScore);
+  assert.ok(sensitive.potentialHoursReclaimed <= lowFriction.potentialHoursReclaimed);
 });

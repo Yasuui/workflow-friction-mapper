@@ -42,6 +42,13 @@ The report is deterministic and runs in the browser. See [PRIVACY.md](PRIVACY.md
 
 > Time estimates are illustrative. They use only the frequency and duration entered by the user and should be validated against a measured baseline.
 
+## How to interpret accuracy
+
+- **Calculated:** annual manual time is direct arithmetic from the entered minutes and weekly frequency.
+- **Directional:** friction, automation fit, and potential reclaimed time are transparent heuristics—not predictions or audit findings.
+- **Input confidence:** the report checks for a trigger, ordered steps, a completion state, time, and frequency. Weak input receives a low-confidence warning and specific correction prompts.
+- **Validation required:** users should compare cycle time, exceptions, and output quality across 10–20 real runs before making a business case.
+
 ## Run locally
 
 Requirements: Node.js 22.13 or newer.

@@ -57,6 +57,7 @@ ${report.summary}
 - Automation readiness: ${report.automationReadiness}/100
 - Annual manual time: ${report.annualManualHours} hours
 - Potential time reclaimed: ${report.potentialHoursReclaimed} hours
+- Input confidence: ${report.inputConfidence} (${report.inputQualityScore}/100)
 
 _${report.estimateNote}_
 
@@ -68,6 +69,9 @@ ${report.opportunities.map((item) => `- **${item.title}** — ${item.rationale}`
 
 ## Why these scores
 ${report.scoreDrivers.map((item) => `- ${item}`).join("\n")}
+
+## Improve input accuracy
+${report.inputImprovements.length ? report.inputImprovements.map((item) => `- ${item}`).join("\n") : "- The input includes a usable trigger, ordered steps, completion state, time, and frequency."}
 
 ## How to validate impact
 ${report.validationChecks.map((item) => `- ${item}`).join("\n")}
@@ -190,17 +194,20 @@ export function WorkflowStudio() {
 
       {report && <section className="results-shell" ref={resultsRef} aria-labelledby="results-title">
         <div className="results-header">
-          <div><span className="section-kicker">Your workflow signal</span><h2 id="results-title">A clearer place to start.</h2></div>
+          <div><span className="section-kicker">Your workflow signal</span><div className={`confidence-badge confidence-${report.inputConfidence.toLowerCase()}`}><i /> Input confidence: <strong>{report.inputConfidence}</strong><small>· {report.inputQualityScore}/100</small></div><h2 id="results-title">A clearer place to start.</h2></div>
           <div className="results-actions"><button type="button" onClick={copyReport}>{copyStatus}</button><button type="button" onClick={downloadReport}>Download .md</button><button type="button" onClick={reset}>Reset</button></div>
         </div>
         <p className="executive-summary">{report.summary}</p>
         <div className="metric-grid">
-          <article><span>Friction signal</span><strong>{report.frictionScore}<small>/100</small></strong><div className="meter"><i style={{ width: `${report.frictionScore}%` }} /></div><em>Directional</em></article>
-          <article><span>Automation fit</span><strong>{report.automationReadiness}<small>/100</small></strong><div className="meter"><i style={{ width: `${report.automationReadiness}%` }} /></div><em>Directional</em></article>
-          <article><span>Annual manual time</span><strong>{report.annualManualHours}<small> hrs</small></strong><em>Illustrative</em></article>
-          <article><span>Potentially reclaimed</span><strong>{report.potentialHoursReclaimed}<small> hrs</small></strong><em>Illustrative</em></article>
+          <article><span>Friction signal</span><strong>{report.frictionScore}<small>/100</small></strong><p>Higher means more recurring effort, handoffs, repeated work, or control needs.</p><div className="meter"><i style={{ width: `${report.frictionScore}%` }} /></div><em>Directional</em></article>
+          <article><span>Automation fit</span><strong>{report.automationReadiness}<small>/100</small></strong><p>Higher means the workflow contains clearer, repeatable patterns that can be piloted safely.</p><div className="meter"><i style={{ width: `${report.automationReadiness}%` }} /></div><em>Directional</em></article>
+          <article><span>Annual manual time</span><strong>{report.annualManualHours}<small> hrs</small></strong><p>Minutes each time × times per week × 52, converted to hours.</p><em>Calculated</em></article>
+          <article><span>Potentially reclaimed</span><strong>{report.potentialHoursReclaimed}<small> hrs</small></strong><p>A conservative scenario based on matched fixes and data sensitivity—not a promise.</p><em>Illustrative</em></article>
         </div>
+        <div className="accuracy-note"><strong>Accuracy note</strong><p>This is a directional heuristic, not an audit or forecast. Results can be off when steps, volume, handoffs, or data constraints are missing. Use the validation checks below before making a business case.</p></div>
+        <details className="methodology-note"><summary>How the analysis works</summary><div><p><strong>Friction</strong> weighs recurring effort, handoffs, repeatable task signals, and data sensitivity.</p><p><strong>Automation fit</strong> looks for clear patterns such as validation, reminders, monitoring, summaries, onboarding, and approvals, then adjusts for handoffs and sensitive data.</p><p><strong>Time reclaimed</strong> applies a bounded scenario rate to the calculated annual hours. It must be replaced with measured pilot results.</p></div></details>
         <p className="estimate-note">{report.estimateNote}</p>
+        {report.inputImprovements.length > 0 && <article className="quality-panel"><div><span className="panel-label">Improve input accuracy</span><strong>{report.inputConfidence} confidence</strong></div><ul>{report.inputImprovements.map((item) => <li key={item}><span aria-hidden="true">+</span>{item}</li>)}</ul></article>}
         <div className="explain-grid">
           <article className="explain-panel"><span className="panel-label">Why these scores</span><ul>{report.scoreDrivers.map((item) => <li key={item}><span aria-hidden="true">→</span>{item}</li>)}</ul></article>
           <article className="explain-panel"><span className="panel-label">How to validate impact</span><ol>{report.validationChecks.map((item, index) => <li key={item}><span>{index + 1}</span>{item}</li>)}</ol></article>

@@ -1,4 +1,5 @@
 export type Sensitivity = "public" | "internal" | "sensitive";
+export type InputConfidence = "Low" | "Medium" | "High";
 
 export interface WorkflowInput {
   description: string;
@@ -26,6 +27,9 @@ export interface WorkflowReport {
   opportunities: AutomationOpportunity[];
   scoreDrivers: string[];
   validationChecks: string[];
+  inputConfidence: InputConfidence;
+  inputQualityScore: number;
+  inputImprovements: string[];
   safeguards: string[];
   firstMove: string;
 }
@@ -149,8 +153,43 @@ function detectOpportunities(description: string): AutomationOpportunity[] {
   return combined.slice(0, 5);
 }
 
+function assessInputQuality(input: WorkflowInput, steps: string[]) {
+  const description = input.description.trim();
+  const hasTrigger = /\b(when|after|once|receive|received|arrive|new|start|request|trigger|submit)\w*/i.test(description);
+  const hasCompletion = /\b(close|finish|complete|archive|done|send|publish|approve|add|save|submit)\w*/i.test(description);
+  let score = 15;
+  const improvements: string[] = [];
+
+  if (description.length >= 60) score += 15;
+  else improvements.push("Add enough detail to explain the current process, not only its name.");
+
+  if (steps.length >= 3) score += 25;
+  else if (steps.length === 2) score += 12;
+  else improvements.push("Write at least three ordered steps so bottlenecks can be located.");
+
+  if (hasTrigger) score += 15;
+  else improvements.push("Name the trigger that starts the workflow, such as a request, meeting, or new case.");
+
+  if (hasCompletion) score += 10;
+  else improvements.push("Describe what done means: sent, approved, saved, closed, or confirmed.");
+
+  if (input.minutesPerRun > 0) score += 10;
+  else improvements.push("Add the approximate minutes required each time.");
+
+  if (input.runsPerWeek > 0) score += 10;
+  else improvements.push("Add how many times the workflow runs in a typical week.");
+
+  const inputQualityScore = clamp(score);
+  const inputConfidence: InputConfidence =
+    inputQualityScore >= 75 ? "High" : inputQualityScore >= 50 ? "Medium" : "Low";
+
+  return { inputConfidence, inputQualityScore, inputImprovements: improvements };
+}
+
 export function analyzeWorkflow(input: WorkflowInput): WorkflowReport {
   const description = input.description.trim();
+  const steps = extractSteps(description);
+  const inputQuality = assessInputQuality(input, steps);
   const opportunities = detectOpportunities(description);
   const matchedSignals = opportunityRules.filter((rule) =>
     rule.terms.some((term) => description.toLowerCase().includes(term)),
@@ -206,7 +245,6 @@ export function analyzeWorkflow(input: WorkflowInput): WorkflowReport {
     );
   }
 
-  const steps = extractSteps(description);
   const firstOpportunity = opportunities[0];
   const scoreDrivers = [
     `${input.minutesPerRun} minutes × ${input.runsPerWeek} runs per week equals about ${annualManualHours} manual hours per year.`,
@@ -233,11 +271,15 @@ export function analyzeWorkflow(input: WorkflowInput): WorkflowReport {
     potentialHoursReclaimed,
     estimateNote:
       "Illustrative, directional scenario based only on the time and frequency entered—not a forecast. Validate every estimate with a measured baseline.",
-    summary: `This workflow shows ${frictionScore >= 70 ? "high" : frictionScore >= 45 ? "meaningful" : "manageable"} friction and ${automationReadiness >= 65 ? "strong" : "developing"} automation readiness. Focus first on a bounded step with clear inputs, ownership, and review.`,
+    summary:
+      inputQuality.inputConfidence === "Low"
+        ? "Low input confidence: the description is too limited for a reliable workflow assessment. Improve the missing details below before acting on the scores."
+        : `With ${inputQuality.inputConfidence.toLowerCase()} input confidence, this workflow shows ${frictionScore >= 70 ? "high" : frictionScore >= 45 ? "meaningful" : "manageable"} friction and ${automationReadiness >= 65 ? "strong" : "developing"} automation fit. Focus first on a bounded step with clear inputs, ownership, and review.`,
     steps: steps.length > 0 ? steps : ["Describe the current workflow"],
     opportunities,
     scoreDrivers,
     validationChecks,
+    ...inputQuality,
     safeguards,
     firstMove: `Start with ${firstOpportunity.title.toLowerCase()}. Run it beside the current process, measure exceptions, and expand only after the result is reliable.`,
   };
