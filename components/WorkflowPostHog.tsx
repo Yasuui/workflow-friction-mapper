@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import Script from "next/script";
 
 type PostHogClient = {
   init: (token: string, config: Record<string, unknown>) => void;
@@ -23,8 +22,33 @@ function capture(event: string, properties?: Record<string, string | number>) {
   window.posthog?.capture(event, properties);
 }
 
+function initializePostHog() {
+  if (window.posthog) return;
+  const queue = [] as unknown as PostHogClient;
+  queue._i = [];
+  queue.push = Array.prototype.push.bind(queue) as (...args: unknown[]) => number;
+  queue.init = (token, config) => queue._i?.push([token, config]);
+  queue.capture = (event, properties) => queue.push(["capture", event, properties]);
+  window.posthog = queue;
+  queue.init(POSTHOG_TOKEN, {
+    api_host: POSTHOG_HOST,
+    autocapture: false,
+    capture_pageview: false,
+    capture_pageleave: false,
+    disable_session_recording: true,
+    persistence: "memory",
+    person_profiles: "never",
+  });
+  const script = document.createElement("script");
+  script.id = "posthog-sdk";
+  script.async = true;
+  script.src = `${POSTHOG_HOST}/static/array.js`;
+  document.head.appendChild(script);
+}
+
 export default function WorkflowPostHog() {
   useEffect(() => {
+    initializePostHog();
     const onFocus = (event: FocusEvent) => {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
@@ -58,32 +82,5 @@ export default function WorkflowPostHog() {
     };
   }, []);
 
-  return (
-    <>
-      <Script id="posthog-bootstrap" strategy="beforeInteractive">
-        {`
-window.posthog = window.posthog || [];
-window.posthog._i = window.posthog._i || [];
-window.posthog.init = window.posthog.init || function(token, config) {
-  window.posthog._i.push([token, config]);
-};
-["capture", "identify", "alias", "register", "reset"].forEach(function(method) {
-  window.posthog[method] = window.posthog[method] || function() {
-    window.posthog.push([method].concat(Array.prototype.slice.call(arguments)));
-  };
-});
-window.posthog.init(${JSON.stringify(POSTHOG_TOKEN)}, {
-  api_host: ${JSON.stringify(POSTHOG_HOST)},
-  autocapture: false,
-  capture_pageview: false,
-  capture_pageleave: false,
-  disable_session_recording: true,
-  persistence: "memory",
-  person_profiles: "never"
-});
-        `}
-      </Script>
-      <Script src={`${POSTHOG_HOST}/static/array.js`} strategy="afterInteractive" />
-    </>
-  );
+  return null;
 }
