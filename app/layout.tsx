@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import WorkflowPostHog from "@/components/WorkflowPostHog";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,7 +37,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" style={{ colorScheme: "light", backgroundColor: "#f5f4ef", color: "#151515" }}>
-      <body>{children}</body>
+      <body><WorkflowPostHog />{children}</body>
     </html>
   );
 }
