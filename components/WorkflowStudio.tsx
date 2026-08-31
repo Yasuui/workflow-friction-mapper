@@ -1,13 +1,25 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { FlowMark } from "@/components/FlowMark";
 import { analyzeWorkflow, type Sensitivity, type WorkflowInput, type WorkflowReport } from "@/lib/workflow-analysis";
+import {
+  acquisitionSource,
+  captureProductEvent,
+  resultContext,
+  type FeedbackReason,
+  type FeedbackValue,
+} from "@/lib/product-analytics";
 
 const initialInput: WorkflowInput = { description: "", minutesPerRun: 20, runsPerWeek: 5, handoffs: 2, sensitivity: "internal" };
-const workflowExamples: Array<{ label: string; input: WorkflowInput }> = [
+const workflowExamples: Array<{
+  label: string;
+  analyticsLabel: "data_review" | "meeting_follow_up" | "case_monitoring" | "onboarding";
+  input: WorkflowInput;
+}> = [
   {
     label: "Data review",
+    analyticsLabel: "data_review",
     input: {
       description: "Export requests from Excel. Check required fields and remove duplicates. Send incomplete rows back to the owner. Add valid requests to the case queue.",
       minutesPerRun: 30,
@@ -18,6 +30,7 @@ const workflowExamples: Array<{ label: string; input: WorkflowInput }> = [
   },
   {
     label: "Meeting follow-up",
+    analyticsLabel: "meeting_follow_up",
     input: {
       description: "After a project meeting, write notes and action items. Confirm owners and due dates. Send reminders in Teams. Escalate overdue actions to the project lead.",
       minutesPerRun: 25,
@@ -28,6 +41,7 @@ const workflowExamples: Array<{ label: string; input: WorkflowInput }> = [
   },
   {
     label: "Case monitoring",
+    analyticsLabel: "case_monitoring",
     input: {
       description: "A new IT case enters the queue. Review its priority and assign an owner. Check the status each day. Notify the owner near the service deadline. Close the case after confirmation.",
       minutesPerRun: 15,
@@ -38,6 +52,7 @@ const workflowExamples: Array<{ label: string; input: WorkflowInput }> = [
   },
   {
     label: "Onboarding",
+    analyticsLabel: "onboarding",
     input: {
       description: "When a new employee starts, assign required courses and access tasks. Remind each owner before the due date. Check completion weekly. Escalate missing items before onboarding closes.",
       minutesPerRun: 40,
@@ -46,6 +61,14 @@ const workflowExamples: Array<{ label: string; input: WorkflowInput }> = [
       sensitivity: "internal",
     },
   },
+];
+
+const feedbackReasons: Array<{ value: FeedbackReason; label: string }> = [
+  { value: "clear_next_step", label: "Clear next step" },
+  { value: "wrong_priority", label: "Wrong priority" },
+  { value: "missing_context", label: "Missing context" },
+  { value: "unclear_estimate", label: "Unclear estimate" },
+  { value: "other", label: "Something else" },
 ];
 
 function reportToMarkdown(report: WorkflowReport) {
@@ -91,7 +114,15 @@ export function WorkflowStudio() {
   const [report, setReport] = useState<WorkflowReport | null>(null);
   const [error, setError] = useState("");
   const [copyStatus, setCopyStatus] = useState("Copy report");
+  const [usedExample, setUsedExample] = useState(false);
+  const [feedbackValue, setFeedbackValue] = useState<FeedbackValue | null>(null);
+  const [feedbackReason, setFeedbackReason] = useState<FeedbackReason | null>(null);
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const resultsRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    captureProductEvent("mapper_viewed", { acquisition_source: acquisitionSource() });
+  }, []);
 
   function updateNumber(field: "minutesPerRun" | "runsPerWeek" | "handoffs", value: string) {
     setInput((current) => ({ ...current, [field]: Math.max(0, Number(value) || 0) }));
@@ -101,11 +132,21 @@ export function WorkflowStudio() {
     event.preventDefault();
     if (!input.description.trim()) {
       setError("Add a short description of the workflow first.");
+      captureProductEvent("analysis_validation_failed", { reason: "missing_description" });
       return;
     }
+    const nextReport = analyzeWorkflow(input);
     setError("");
     setCopyStatus("Copy report");
-    setReport(analyzeWorkflow(input));
+    setFeedbackValue(null);
+    setFeedbackReason(null);
+    setFeedbackSent(false);
+    setReport(nextReport);
+    captureProductEvent("analysis_completed", {
+      ...resultContext(nextReport),
+      primary_opportunity: nextReport.opportunities[0]?.id ?? "none",
+      used_example: usedExample,
+    });
     window.requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
@@ -113,6 +154,7 @@ export function WorkflowStudio() {
     if (!report) return;
     await navigator.clipboard.writeText(reportToMarkdown(report));
     setCopyStatus("Copied");
+    captureProductEvent("report_copied", resultContext(report));
   }
 
   function downloadReport() {
@@ -127,14 +169,30 @@ export function WorkflowStudio() {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    captureProductEvent("report_downloaded", resultContext(report));
   }
 
   function reset() {
+    if (report) captureProductEvent("analysis_reset", resultContext(report));
     setInput(initialInput);
     setReport(null);
     setError("");
     setCopyStatus("Copy report");
+    setUsedExample(false);
+    setFeedbackValue(null);
+    setFeedbackReason(null);
+    setFeedbackSent(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function submitFeedback() {
+    if (!report || !feedbackValue || !feedbackReason) return;
+    captureProductEvent("feedback_submitted", {
+      ...resultContext(report),
+      feedback_value: feedbackValue,
+      feedback_reason: feedbackReason,
+    });
+    setFeedbackSent(true);
   }
 
   return (
@@ -151,7 +209,7 @@ export function WorkflowStudio() {
           <div className="eyebrow"><span className="pulse-dot" /> Browser-only workflow analysis</div>
           <h1>Find the friction before you automate.</h1>
           <p className="hero-lede">Turn one manual workflow into a clear map of bottlenecks, automation opportunities, safeguards, and the next best move.</p>
-          <div className="hero-trust"><span>No account</span><span>No upload</span><span>No tracking</span></div>
+          <div className="hero-trust"><span>No account</span><span>No upload</span><span>No workflow data sent</span></div>
         </div>
 
         <div className="studio-card">
@@ -174,7 +232,9 @@ export function WorkflowStudio() {
               <span>Try an example</span>
               <div>{workflowExamples.map((example) => <button key={example.label} type="button" onClick={() => {
                 setInput(example.input);
+                setUsedExample(true);
                 setError("");
+                captureProductEvent("example_selected", { example_label: example.analyticsLabel });
               }}>{example.label}</button>)}</div>
             </div>
             <div className="character-row"><span>Use synthetic or sanitized details</span><span>{input.description.length}/900</span></div>
@@ -219,6 +279,36 @@ export function WorkflowStudio() {
         <div className="accuracy-note"><strong>Accuracy note</strong><p>This is a directional heuristic, not an audit or forecast. Results can be off when steps, volume, handoffs, or data constraints are missing. Use the validation checks below before making a business case.</p></div>
         <details className="methodology-note"><summary>How the analysis works</summary><div><p><strong>Friction</strong> weighs recurring effort, handoffs, repeatable task signals, and data sensitivity.</p><p><strong>Automation fit</strong> looks for clear patterns such as validation, reminders, monitoring, summaries, onboarding, and approvals, then adjusts for handoffs and sensitive data.</p><p><strong>Time reclaimed</strong> applies a bounded scenario rate to the calculated annual hours. It must be replaced with measured pilot results.</p></div></details>
         <p className="estimate-note">{report.estimateNote}</p>
+        <aside className="feedback-panel" aria-labelledby="feedback-title">
+          {feedbackSent ? (
+            <div className="feedback-thanks"><strong>Feedback recorded.</strong><span>Thank you for helping improve the recommendation.</span></div>
+          ) : (
+            <>
+              <div>
+                <span className="panel-label">Private product feedback</span>
+                <strong id="feedback-title">Was the first recommendation useful?</strong>
+                <p>Only these selected categories are recorded. Your workflow and report stay on this device.</p>
+              </div>
+              <div className="feedback-controls">
+                <div className="feedback-options" aria-label="Recommendation usefulness">
+                  {(["yes", "partly", "no"] as const).map((value) => (
+                    <button key={value} type="button" className={feedbackValue === value ? "selected" : ""} onClick={() => setFeedbackValue(value)}>
+                      {value === "yes" ? "Yes" : value === "partly" ? "Partly" : "No"}
+                    </button>
+                  ))}
+                </div>
+                <div className="feedback-reasons" aria-label="Feedback reason">
+                  {feedbackReasons.map((reason) => (
+                    <button key={reason.value} type="button" className={feedbackReason === reason.value ? "selected" : ""} onClick={() => setFeedbackReason(reason.value)}>
+                      {reason.label}
+                    </button>
+                  ))}
+                </div>
+                <button className="feedback-submit" type="button" disabled={!feedbackValue || !feedbackReason} onClick={submitFeedback}>Submit feedback</button>
+              </div>
+            </>
+          )}
+        </aside>
         {report.inputImprovements.length > 0 && <article className="quality-panel"><div><span className="panel-label">Improve input accuracy</span><strong>{report.inputConfidence} confidence</strong></div><ul>{report.inputImprovements.map((item) => <li key={item}><span aria-hidden="true">+</span>{item}</li>)}</ul></article>}
         <div className="explain-grid">
           <article className="explain-panel"><span className="panel-label">Why these scores</span><ul>{report.scoreDrivers.map((item) => <li key={item}><span aria-hidden="true">→</span>{item}</li>)}</ul></article>
@@ -236,9 +326,9 @@ export function WorkflowStudio() {
         <span className="section-kicker">Built by Yonis Diriye</span><h2>Better systems start<br />with a clear map.</h2>
         <p>I build practical AI automation and full-stack tools that make work clearer, faster, and safer.</p>
         <div className="contact-links">
-          <a href="https://www.linkedin.com/in/yonisdiriye/" target="_blank" rel="noreferrer">Connect on LinkedIn <span aria-hidden="true">↗</span></a>
-          <a href="https://github.com/Yasuui/workflow-friction-mapper" target="_blank" rel="noreferrer">View the source <span aria-hidden="true">↗</span></a>
-          <a href="https://cal.com/yonis-diriye" target="_blank" rel="noreferrer">Book a conversation <span aria-hidden="true">↗</span></a>
+          <a href="https://www.linkedin.com/in/yonisdiriye/" target="_blank" rel="noreferrer" onClick={() => captureProductEvent("contact_clicked", { destination: "linkedin" })}>Connect on LinkedIn <span aria-hidden="true">↗</span></a>
+          <a href="https://github.com/Yasuui/workflow-friction-mapper" target="_blank" rel="noreferrer" onClick={() => captureProductEvent("contact_clicked", { destination: "github" })}>View the source <span aria-hidden="true">↗</span></a>
+          <a href="https://cal.com/yonis-diriye" target="_blank" rel="noreferrer" onClick={() => captureProductEvent("contact_clicked", { destination: "calcom" })}>Book a conversation <span aria-hidden="true">↗</span></a>
         </div>
       </section>
       <footer><span className="footer-brand"><FlowMark /> Workflow Friction Mapper</span><span>Private by design · © {new Date().getFullYear()} Yonis Diriye</span></footer>

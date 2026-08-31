@@ -52,10 +52,15 @@ The tool does not call an AI model or send workflow text to a server. It is desi
 
 - No sign-in or account
 - No API requests or AI model calls
-- No database, cookies, analytics, or browser storage
+- No workflow database, cookies, or browser storage
+- Cookieless, explicit-event-only product analytics; no autocapture or session replay
 - No workflow text leaves the browser
 - Refresh clears the active input and report
 - Sensitive-data warning appears before analysis
+
+Anonymous analytics measure the product funnel using fixed categories such as result confidence bands, recommendation categories, report actions, and structured feedback. Exact workflow inputs, report contents, exact scores, names, emails, and free text are never sent. See [PRIVACY.md](PRIVACY.md).
+
+Analytics definitions live in [docs/analytics-event-contract.md](docs/analytics-event-contract.md). The [product evidence playbook](docs/evidence-playbook.md) defines how verification traffic is excluded and when usage data is strong enough for portfolio or résumé claims.
 
 The report is deterministic and runs in the browser. See [PRIVACY.md](PRIVACY.md) for the full data-flow statement.
 

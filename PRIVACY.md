@@ -1,6 +1,6 @@
 # Privacy statement
 
-Workflow Friction Mapper is intentionally designed without user accounts, persistent storage, or server-side workflow processing.
+Workflow Friction Mapper is intentionally designed without user accounts, a workflow database, or server-side workflow processing.
 
 ## Data flow
 
@@ -9,20 +9,41 @@ Workflow Friction Mapper is intentionally designed without user accounts, persis
 3. The generated report stays in temporary React memory.
 4. Copy and download actions operate locally in the browser.
 5. Refreshing or resetting the page clears the active input and report.
+6. A small set of cookieless, anonymous product events may be sent to PostHog to measure whether the tool is useful.
 
-## What is not collected
+## Anonymous product analytics
 
-The application does not include:
+PostHog is configured in cookieless mode. It does not use browser cookies, local storage, or session storage, and it does not create named user profiles. Session replay is disabled. Autocapture, automatic pageview capture, and automatic exception capture are also disabled.
+
+Only explicit product events are recorded:
+
+- mapper viewed;
+- example selected, using one of four fixed example labels;
+- missing-description validation error;
+- analysis completed, using only low/medium/high score bands, input-confidence band, a fixed recommendation category, and whether an example was used;
+- report copied or downloaded;
+- analysis reset;
+- structured feedback selections; and
+- LinkedIn, GitHub, or Cal.com link selected.
+
+Acquisition is reduced to a fixed category such as direct, LinkedIn, GitHub, X, search, or other. Client payloads are allowlisted: only named event properties may be sent. PostHog automatic properties, full URLs, search terms, IP, detailed location, and referrer URLs are stripped before an event is sent.
+
+## What is never collected
+
+Workflow text is never sent to PostHog or any other server. No names or email addresses are collected. The analytics payload excludes:
 
 - a database;
 - API routes or third-party model calls;
-- analytics or advertising trackers;
-- cookies;
-- local or session storage;
-- authentication; or
-- telemetry containing workflow text.
+- workflow descriptions, steps, report text, score explanations, or recommendations;
+- exact minutes, frequency, handoff counts, sensitivity selections, scores, or calculated hours;
+- names or email addresses;
+- company, employer, or account identifiers;
+- free-text feedback;
+- precise location;
+- session replay or screen recordings; and
+- authentication or advertising profiles.
 
-The public host may retain standard infrastructure access logs. The application does not intentionally add workflow input to URLs, logs, requests, or error reports.
+The public host and PostHog may retain standard infrastructure metadata needed to serve requests and aggregate anonymous usage. The application does not add workflow input to URLs, logs, analytics requests, or error reports.
 
 ## Responsible use
 

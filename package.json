@@ -13,7 +13,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel"
   },
   "dependencies": {
-    "next": "16.2.6",
+    "next": "^16.2.12",
+    "posthog-js": "^1.407.8",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
@@ -23,9 +24,12 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "^16.2.12",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "postcss": "8.5.18"
   },
   "type": "module"
 }
