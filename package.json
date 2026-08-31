@@ -9,14 +9,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build && node --test tests/*.test.mjs",
+    "test": "tsc --noEmit && next build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.52",
+    "@ai-sdk/react": "^4.0.88",
+    "ai": "^7.0.85",
+    "jspdf": "^4.2.1",
     "next": "^16.2.12",
     "posthog-js": "^1.407.8",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "unpdf": "^1.8.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.1",

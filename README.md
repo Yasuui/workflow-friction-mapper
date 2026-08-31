@@ -2,33 +2,26 @@
 
 ![Workflow Friction Mapper — Find the friction before you automate](docs/screenshots/social-card.png)
 
-A private, browser-only tool that turns one manual workflow into a clear map of friction, automation opportunities, safeguards, and the next best move.
+A chat agent that reads a workflow you share and returns a grounded brief: friction, bottlenecks, opportunities, and a first move.
 
 **[Open the live tool](https://workflow-friction-mapper.vercel.app)** · **[View the source](https://github.com/Yasuui/workflow-friction-mapper)**
 
-Built by [Yonis Diriye](https://www.linkedin.com/in/yonisdiriye/) as a practical demonstration of AI automation thinking, workflow design, privacy-aware product development, and full-stack execution.
+Built by [Yonis Diriye](https://www.linkedin.com/in/yonisdiriye/).
 
 ## Why it exists
 
-Teams often automate a process before they understand it. That can make unclear ownership, inconsistent data, and unnecessary handoffs move faster without making the system better.
-
-Workflow Friction Mapper provides a lightweight first assessment. It helps a user:
-
-- break a workflow into visible steps;
-- estimate recurring manual effort;
-- identify bounded automation opportunities;
-- add safeguards before scale; and
-- choose one measurable pilot instead of attempting a risky rewrite.
+Teams often automate a process before they understand it. This agent is the first conversation: extract the real steps, name the friction, and pick one reversible move.
 
 ## How it works
 
-1. **Describe:** enter a sanitized trigger, ordered steps, decisions, handoffs, completion state, time, and frequency.
-2. **Map:** a deterministic browser-local engine turns the description into an ordered workflow.
-3. **Explain:** the report shows calculated time, directional friction and automation-fit signals, input confidence, and the factors behind each result.
-4. **Improve:** workflow-specific fixes are prioritized alongside safeguards and a bounded first pilot.
-5. **Validate:** the report defines checks for cycle time, exceptions, rework, and output quality across real runs.
+1. **Land in chat.** The agent greets you. Paste a process, attach a SOP/notes file, or tap a starter.
+2. **Read what you share.** Text, Markdown, CSV, JSON, and PDF text go to the optimizer. Images go to the live model when a key is present.
+3. **Get a brief in the thread.** Spoken summary plus a structured report card. Claims are facts from your material or labeled inferences — no invented hours or tools.
+4. **Take it with you.** Copy, download Markdown (`workflow-optimization-brief.md`), or download PDF (`workflow-optimization-brief.pdf`).
 
-The tool does not call an AI model or send workflow text to a server. It is designed to improve the first automation conversation—not replace process owners, security review, or measured validation.
+Without `OPENAI_API_KEY` the UI runs in **demo mode** (a polished streamed sample grounded in what you typed). With a key, `/api/optimize` uses **gpt-5-mini** (`MODEL`, fallback `gpt-4.1-mini`).
+
+The tool does not replace process owners, security review, or measured validation.
 
 ## Product views
 
@@ -48,41 +41,24 @@ The tool does not call an AI model or send workflow text to a server. It is desi
 
 ![Contact and source actions](docs/screenshots/contact.png)
 
-## Privacy by design
+## What is and is not collected
 
-- No sign-in or account
-- No API requests or AI model calls
-- No workflow database, cookies, or browser storage
+- No account
+- Chat messages and attachments are sent to `/api/optimize` so the agent can read them
+- In live mode that content is sent to the model provider (OpenAI)
 - Cookieless, explicit-event-only product analytics; no autocapture or session replay
-- No workflow text leaves the browser
-- Refresh clears the active input and report
-- Sensitive-data warning appears before analysis
+- Workflow text is never sent to PostHog
 
-Anonymous analytics measure the product funnel using fixed categories such as result confidence bands, recommendation categories, report actions, and structured feedback. Exact workflow inputs, report contents, exact scores, names, emails, and free text are never sent. See [PRIVACY.md](PRIVACY.md).
+See [PRIVACY.md](PRIVACY.md). Analytics definitions live in [docs/analytics-event-contract.md](docs/analytics-event-contract.md).
 
-Analytics definitions live in [docs/analytics-event-contract.md](docs/analytics-event-contract.md). The [product evidence playbook](docs/evidence-playbook.md) defines how verification traffic is excluded and when usage data is strong enough for portfolio or résumé claims.
+## What the brief includes
 
-The report is deterministic and runs in the browser. See [PRIVACY.md](PRIVACY.md) for the full data-flow statement.
-
-## What the report includes
-
-- Directional friction and automation-fit signals with visible score drivers
-- Illustrative annual manual hours and potential reclaimed time
-- Ordered workflow map
-- Prioritized fixes matched to the described workflow
-- Data and human-review safeguards
-- Recommended first pilot
-- Three checks to validate cycle time, exceptions, and output quality
-- Local copy and Markdown download actions
-
-> Time estimates are illustrative. They use only the frequency and duration entered by the user and should be validated against a measured baseline.
-
-## How to interpret accuracy
-
-- **Calculated:** annual manual time is direct arithmetic from the entered minutes and weekly frequency.
-- **Directional heuristic:** friction, automation fit, and potential reclaimed time are transparent heuristics—not predictions or audit findings.
-- **Input confidence:** the report checks for a trigger, ordered steps, a completion state, time, and frequency. Weak input receives a low-confidence warning and specific correction prompts.
-- **Validation required:** users should compare cycle time, exceptions, and output quality across 10–20 real runs before making a business case.
+- Ordered current steps
+- Friction and bottlenecks with evidence (fact vs inference)
+- Opportunities tied to named steps
+- One first move
+- Optional hours only when you stated volume
+- Copy, Markdown, and PDF export
 
 ## Run locally
 
@@ -93,33 +69,28 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000`. Demo mode works with no API key. To use the live model later, copy `.env.example` to `.env.local` and set `OPENAI_API_KEY` and `MODEL=gpt-5-mini`.
 
 ## Verify
 
 ```bash
 npm test
 npm run lint
-node --test tests/workflow-analysis.test.mjs
 ```
-
-The checks cover deterministic analysis, workflow-specific recommendations, sensitive-data safeguards, server rendering, privacy boundaries, and starter-code removal.
 
 ## Product architecture
 
 ```text
-One-step input
-      ↓
-In-browser deterministic analysis
-      ↓
-Workflow map + quantified signals
-      ↓
-Safeguards + recommended first pilot
-      ↓
-Copy or download locally
+Chat + attachments
+      |
+/api/optimize  (demo stream, or gpt-5-mini when keyed)
+      |
+Spoken reply + structured brief in-thread
+      |
+Copy / workflow-optimization-brief.md / .pdf
 ```
 
-Core stack: Next.js, React, TypeScript, Tailwind CSS, and Vercel.
+Core stack: Next.js, React, TypeScript, Vercel AI SDK, Tailwind CSS, and Vercel.
 
 ## Connect
 

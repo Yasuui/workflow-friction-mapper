@@ -2,6 +2,7 @@
 
 import posthog from "posthog-js";
 import type { WorkflowReport } from "@/lib/workflow-analysis";
+import type { AgentReport } from "@/lib/agent-protocol";
 
 export const PRODUCT_EVENTS = [
   "mapper_viewed",
@@ -108,6 +109,15 @@ export function resultContext(report: WorkflowReport): ResultContext {
     input_confidence: report.inputConfidence.toLowerCase() as ResultContext["input_confidence"],
     friction_band: scoreBand(report.frictionScore),
     automation_fit_band: scoreBand(report.automationReadiness),
+  };
+}
+
+
+export function resultContextFromAgent(report: AgentReport): ResultContext {
+  return {
+    input_confidence: report.missing.length ? "low" : report.assumptions.length ? "medium" : "high",
+    friction_band: report.friction.length >= 3 ? "high" : report.friction.length >= 1 ? "medium" : "low",
+    automation_fit_band: report.opportunities.length >= 2 ? "high" : report.opportunities.length >= 1 ? "medium" : "low",
   };
 }
 

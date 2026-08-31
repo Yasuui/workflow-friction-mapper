@@ -1,50 +1,29 @@
 # Privacy statement
 
-Workflow Friction Mapper is intentionally designed without user accounts, a workflow database, or server-side workflow processing.
+Workflow Friction Mapper is a chat agent that reads the workflow you share in order to optimize it. There is no account and no workflow database.
 
 ## Data flow
 
-1. A user enters a workflow description and a few numeric inputs.
-2. The application analyzes those inputs with deterministic TypeScript in the browser.
-3. The generated report stays in temporary React memory.
-4. Copy and download actions operate locally in the browser.
-5. Refreshing or resetting the page clears the active input and report.
-6. A small set of cookieless, anonymous product events may be sent to PostHog to measure whether the tool is useful.
+1. You paste a process, tap a starter, or attach a file in the chat.
+2. That message (and parsed attachment text) is posted to /api/optimize.
+3. Demo mode (no OPENAI_API_KEY): a local streamed brief is generated on the server from what you shared. It does not call a model provider.
+4. Live mode (key present): the same payload is sent to OpenAI (gpt-5-mini by default) so the agent can read it.
+5. Copy and download (Markdown/PDF) run in the browser.
+6. Refreshing or starting a new chat clears the thread from memory.
+7. A small set of cookieless, anonymous product events may be sent to PostHog.
 
 ## Anonymous product analytics
 
 PostHog is configured in cookieless mode. It does not use browser cookies, local storage, or session storage, and it does not create named user profiles. Session replay is disabled. Autocapture, automatic pageview capture, and automatic exception capture are also disabled.
 
-Only explicit product events are recorded:
+Only explicit product events are recorded (view, starter selected, analysis completed as score bands, copy/download, structured feedback, outbound links). Workflow text is never sent to PostHog.
 
-- mapper viewed;
-- example selected, using one of four fixed example labels;
-- missing-description validation error;
-- analysis completed, using only low/medium/high score bands, input-confidence band, a fixed recommendation category, and whether an example was used;
-- report copied or downloaded;
-- analysis reset;
-- structured feedback selections; and
-- LinkedIn, GitHub, or Cal.com link selected.
+## What is never collected for analytics
 
-Acquisition is reduced to a fixed category such as direct, LinkedIn, GitHub, X, search, or other. Client payloads are allowlisted: only named event properties may be sent. PostHog automatic properties, full URLs, search terms, IP, detailed location, and referrer URLs are stripped before an event is sent.
+No names or email addresses are collected. The analytics payload excludes workflow descriptions, steps, report text, exact minutes, frequency, names, free-text feedback, and session replay.
 
-## What is never collected
-
-Workflow text is never sent to PostHog or any other server. No names or email addresses are collected. The analytics payload excludes:
-
-- a database;
-- API routes or third-party model calls;
-- workflow descriptions, steps, report text, score explanations, or recommendations;
-- exact minutes, frequency, handoff counts, sensitivity selections, scores, or calculated hours;
-- names or email addresses;
-- company, employer, or account identifiers;
-- free-text feedback;
-- precise location;
-- session replay or screen recordings; and
-- authentication or advertising profiles.
-
-The public host and PostHog may retain standard infrastructure metadata needed to serve requests and aggregate anonymous usage. The application does not add workflow input to URLs, logs, analytics requests, or error reports.
+The public host and, in live mode, the model provider process the chat content required to answer you. PostHog does not receive that content.
 
 ## Responsible use
 
-Do not enter personal, confidential, regulated, or employer-owned information. Use synthetic examples when evaluating sensitive workflows. Automation recommendations should be piloted with a named human owner, exception handling, auditability, and an approved data boundary.
+Do not enter secrets, passwords, or personal identifiers you would not send to a writing assistant. Use synthetic examples when evaluating sensitive workflows.

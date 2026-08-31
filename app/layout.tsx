@@ -4,11 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL("https://workflow-friction-mapper.vercel.app"),
   title: "Workflow Friction Mapper",
-  description: "Map one manual workflow, understand directional automation signals, and choose a safer measurable pilot—all in your browser.",
+  description: "Chat with an agent that reads the workflow you share, names friction, and proposes a first move.",
   applicationName: "Workflow Friction Mapper",
   authors: [{ name: "Yonis Diriye", url: "https://www.linkedin.com/in/yonisdiriye/" }],
   creator: "Yonis Diriye",
-  keywords: ["workflow automation", "AI automation", "process improvement", "workflow analysis", "privacy-first"],
+  keywords: ["workflow automation", "AI agent", "process improvement", "workflow analysis"],
   alternates: { canonical: "/" },
   icons: {
     icon: [
@@ -21,14 +21,14 @@ export const metadata: Metadata = {
     type: "website",
     url: "/",
     title: "Workflow Friction Mapper",
-    description: "Find the friction before you automate with a private, browser-local workflow assessment.",
+    description: "A chat agent that optimizes one workflow from what you share.",
     siteName: "Workflow Friction Mapper",
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Workflow Friction Mapper — Find the friction before you automate" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Workflow Friction Mapper",
-    description: "Find the friction before you automate with a private, browser-local workflow assessment.",
+    description: "A chat agent that optimizes one workflow from what you share.",
     images: ["/opengraph-image"],
   },
 };

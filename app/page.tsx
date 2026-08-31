@@ -3,7 +3,7 @@ import { WorkflowStudio } from "@/components/WorkflowStudio";
 
 export const metadata: Metadata = {
   title: "Workflow Friction Mapper",
-  description: "Map a manual workflow and find a safer first automation — entirely in your browser.",
+  description: "A chat agent that reads a workflow you share and maps friction, bottlenecks, and a first move.",
 };
 
 export default function Home() {

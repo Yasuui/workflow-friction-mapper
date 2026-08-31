@@ -35,7 +35,7 @@ export default function OpenGraphImage() {
         <SocialMark />
         <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
           <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.8px" }}>Workflow Friction Mapper</div>
-          <div style={{ fontSize: 18, color: "#686863" }}>Private, browser-local workflow analysis</div>
+          <div style={{ fontSize: 18, color: "#686863" }}>Chat agent for one workflow</div>
         </div>
       </div>
 
@@ -44,13 +44,13 @@ export default function OpenGraphImage() {
           Find the friction before you automate.
         </div>
         <div style={{ maxWidth: 900, fontSize: 24, lineHeight: 1.45, color: "#686863" }}>
-          Map one manual workflow, understand the signals, and choose a safer measurable pilot.
+          Paste a process, attach a SOP, and get a grounded brief — friction, bottlenecks, first move.
         </div>
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 18 }}>
         <div style={{ display: "flex", gap: 12, color: "#315c4d" }}>
-          <span>No account</span><span>·</span><span>No upload</span><span>·</span><span>No tracking</span>
+          <span>Chat agent</span><span>·</span><span>Demo ready</span><span>·</span><span>Live model optional</span>
         </div>
         <div style={{ color: "#2167ff", fontWeight: 700 }}>workflow-friction-mapper.vercel.app</div>
       </div>

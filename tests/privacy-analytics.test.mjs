@@ -9,7 +9,7 @@ assert.equal(existsSync(instrumentationUrl), true, "privacy-safe PostHog instrum
 
 const analytics = readFileSync(analyticsUrl, "utf8");
 const instrumentation = readFileSync(instrumentationUrl, "utf8");
-const studio = readFileSync(new URL("../components/WorkflowStudio.tsx", import.meta.url), "utf8");
+const studio = readFileSync(new URL("../components/ReportCard.tsx", import.meta.url), "utf8");
 const privacy = readFileSync(new URL("../PRIVACY.md", import.meta.url), "utf8");
 
 test("PostHog is explicit-event-only and cannot record workflow form contents", () => {
@@ -75,7 +75,7 @@ test("the interface collects structured feedback without a free-text field", () 
 
 test("privacy documentation discloses anonymous analytics and its strict exclusions", () => {
   assert.match(privacy, /cookieless/i);
-  assert.match(privacy, /workflow text is never sent/i);
+  assert.match(privacy, /workflow text is never sent to PostHog/i);
   assert.match(privacy, /session replay is disabled/i);
   assert.match(privacy, /no names or email addresses/i);
 });

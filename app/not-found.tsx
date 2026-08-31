@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function NotFound() {
   return (
-    <main className="page-shell">
+    <main className="page-shell app-shell">
       <div className="ambient ambient-one" aria-hidden="true" />
       <div className="ambient ambient-two" aria-hidden="true" />
       <nav className="nav-wrap" aria-label="Primary navigation">
@@ -22,7 +22,7 @@ export default function NotFound() {
       <section className="not-found" aria-labelledby="not-found-title">
         <div className="eyebrow">404</div>
         <h1 id="not-found-title">Page not found.</h1>
-        <p>That path isn’t part of this tool. Return to the mapper to analyze a workflow in your browser.</p>
+        <p>That path isn’t part of this tool. Return to the agent to optimize a workflow from what you share.</p>
         <Link className="not-found-link" href="/">Back to the mapper <span aria-hidden="true">→</span></Link>
       </section>
     </main>

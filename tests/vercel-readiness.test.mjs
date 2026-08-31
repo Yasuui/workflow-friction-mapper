@@ -10,7 +10,7 @@ test("uses a standard Next.js build for Vercel", async () => {
   assert.equal(packageJson.scripts.dev, "next dev");
   assert.equal(packageJson.scripts.build, "next build");
   assert.equal(packageJson.scripts.start, "next start");
-  assert.equal(packageJson.scripts.test, "npm run build && node --test tests/*.test.mjs");
+  assert.equal(packageJson.scripts.test, "tsc --noEmit && next build && node --test tests/*.test.mjs");
   assert.equal(packageJson.dependencies.vinext, undefined);
   assert.equal(packageJson.devDependencies.wrangler, undefined);
 });
@@ -39,6 +39,9 @@ test("documents the live product with branded visual evidence", async () => {
   assert.match(readme, /docs\/screenshots\/fixes\.png/);
   assert.match(readme, /docs\/screenshots\/contact\.png/);
   assert.match(readme, /## How it works/);
-  assert.match(readme, /Directional heuristic/);
-  assert.match(readme, /No workflow text leaves the browser/);
+  assert.match(readme, /demo mode/i);
+  assert.match(readme, /Workflow text is never sent to PostHog/);
+  assert.match(readme, /gpt-5-mini/);
+  assert.doesNotMatch(readme, /entirely in your browser/i);
+  assert.doesNotMatch(readme, /No tracking/);
 });
