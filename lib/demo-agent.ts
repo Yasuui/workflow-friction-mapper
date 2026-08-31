@@ -13,7 +13,10 @@ export async function collectUserMaterial(
   for (const message of messages) {
     if (message.role !== "user") continue;
     for (const part of message.parts) {
-      if (part.type === "text" && part.text.trim()) chunks.push(part.text.trim());
+      if (part.type === "text") {
+        const text = part.text.trim();
+        if (text && !/^please review the attached file/i.test(text)) chunks.push(text);
+      }
       if (part.type === "file") {
         const name = part.filename ?? "attachment";
         const media = part.mediaType ?? "";

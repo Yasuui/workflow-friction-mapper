@@ -4,29 +4,48 @@ import { jsPDF } from "jspdf";
 import { BRIEF_MARKDOWN_FILENAME, BRIEF_PDF_FILENAME } from "@/lib/agent-protocol";
 
 /**
- * Safari and some Chromium builds save blob: URLs as a bare UUID when:
- * the <a> is removed before the download starts, the Blob has a renderable
- * MIME type, or download is only set as a property. Name the File, force
- * octet-stream, setAttribute("download"), and delay both remove and revoke.
+ * Chrome names blob: downloads after the UUID in the URL and ignores
+ * <a download>. Navigate a same-origin POST whose Content-Disposition
+ * carries the real filename — that is what the download shelf reads.
  */
-export function triggerNamedDownload(data: BlobPart, filename: string) {
-  const file = new File([data], filename, { type: "application/octet-stream" });
-  const url = URL.createObjectURL(file);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", filename);
-  link.setAttribute("rel", "noopener");
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  window.setTimeout(() => {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }, 2500);
+export function triggerNamedDownload(body: string, filename: string, encoding: "utf8" | "base64" = "utf8") {
+  const frameName = "brief-download-frame";
+  let frame = document.getElementById(frameName) as HTMLIFrameElement | null;
+  if (!frame) {
+    frame = document.createElement("iframe");
+    frame.id = frameName;
+    frame.name = frameName;
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.display = "none";
+    document.body.appendChild(frame);
+  }
+
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/api/brief-download";
+  form.target = frameName;
+  form.style.display = "none";
+
+  const fields: Array<[string, string]> = [
+    ["filename", filename],
+    ["body", body],
+    ["encoding", encoding],
+  ];
+  for (const [name, value] of fields) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+
+  document.body.appendChild(form);
+  form.submit();
+  window.setTimeout(() => form.remove(), 4000);
 }
 
 export function downloadBriefMarkdown(markdown: string) {
-  triggerNamedDownload(markdown, BRIEF_MARKDOWN_FILENAME);
+  triggerNamedDownload(markdown, BRIEF_MARKDOWN_FILENAME, "utf8");
 }
 
 export function downloadBriefPdf(title: string, body: string) {
@@ -50,5 +69,5 @@ export function downloadBriefPdf(title: string, body: string) {
     doc.text(line, margin, y);
     y += 16;
   }
-  triggerNamedDownload(doc.output("arraybuffer"), BRIEF_PDF_FILENAME);
+  triggerNamedDownload(doc.output("datauristring").split(",")[1] ?? "", BRIEF_PDF_FILENAME, "base64");
 }

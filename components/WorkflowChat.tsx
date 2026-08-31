@@ -126,7 +126,7 @@ export function WorkflowChat() {
     setDraft("");
     setPendingFiles([]);
     await sendMessage({
-      text: trimmed || "Please review the attached file(s).",
+      text: trimmed,
       files: parts,
     });
   }
