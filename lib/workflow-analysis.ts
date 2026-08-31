@@ -121,11 +121,23 @@ function roundHours(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+function isProcessStep(step: string): boolean {
+  if (step.length <= 1) return false;
+  if (/^(attachment|image attached)\b/i.test(step)) return false;
+  if (/^pdf\b/i.test(step) && /attach/i.test(step)) return false;
+  if (/^(txt|md|csv|json|pdf):?$/i.test(step)) return false;
+  if (/^data is\b/i.test(step)) return false;
+  const volumeOnly = /\b(\d+\s*)?(minutes?|times a week|runs? per week|handoffs?)\b/i.test(step);
+  const action = /\b(export|send|review|check|assign|notify|add|close|remind|confirm|escalate|write|capture|monitor|queue|remove|validate)\b/i.test(step);
+  if (volumeOnly && !action) return false;
+  return true;
+}
+
 export function extractSteps(description: string): string[] {
   const steps = description
     .split(/(?:\r?\n|\s*->\s*|[.;]+|\bthen\b)/i)
     .map((step) => step.replace(/^[-•\d)\s]+/, "").trim())
-    .filter((step) => step.length > 1)
+    .filter(isProcessStep)
     .map((step) => step.charAt(0).toUpperCase() + step.slice(1));
 
   return steps.slice(0, 6);

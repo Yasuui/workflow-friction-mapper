@@ -28,6 +28,8 @@ test("brief downloads use the public filenames", async () => {
   const exporter = await readFile(new URL("../lib/brief-export.ts", import.meta.url), "utf8");
   assert.match(exporter, /appendChild/);
   assert.match(exporter, /revokeObjectURL/);
+  assert.match(exporter, /setAttribute\("download", filename\)/);
+  assert.match(exporter, /new File/);
 });
 
 test("volume is extracted only when stated", () => {
@@ -82,4 +84,26 @@ test("copy no longer claims fully browser-local product", async () => {
     assert.doesNotMatch(source, /No tracking/);
     assert.doesNotMatch(source, /No API requests or AI model calls/);
   }
+});
+
+test("starter volume and attachment headers are not treated as steps", async () => {
+  const { extractSteps } = await import("../lib/workflow-analysis.ts");
+  const starter =
+    "Export requests from Excel. Check required fields and remove duplicates. Send incomplete rows back to the owner. Add valid requests to the case queue. It takes about 30 minutes, 10 times a week, with 2 handoffs. Data is internal.";
+  const steps = extractSteps(starter);
+  assert.equal(steps[0], "Export requests from Excel");
+  assert.ok(steps.every((step) => !/minutes|times a week|handoffs|data is/i.test(step)));
+  assert.equal(steps.length, 4);
+
+  const attached = extractSteps("Attachment dummy-workflow.txt:\nExport requests from Excel. Check required fields.");
+  assert.equal(attached[0], "Export requests from Excel");
+  assert.ok(attached.every((step) => !/^attachment\b/i.test(step)));
+});
+
+test("brief exporter names the File and delays revoke", async () => {
+  const exporter = await readFile(new URL("../lib/brief-export.ts", import.meta.url), "utf8");
+  assert.match(exporter, /setAttribute\("download", filename\)/);
+  assert.match(exporter, /new File/);
+  assert.match(exporter, /application\/octet-stream/);
+  assert.match(exporter, /2500/);
 });

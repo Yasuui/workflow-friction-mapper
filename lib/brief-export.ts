@@ -3,21 +3,30 @@
 import { jsPDF } from "jspdf";
 import { BRIEF_MARKDOWN_FILENAME, BRIEF_PDF_FILENAME } from "@/lib/agent-protocol";
 
-export function downloadTextFile(content: string, filename: string, mime: string) {
-  const blob = new Blob([content], { type: `${mime};charset=utf-8` });
-  const url = URL.createObjectURL(blob);
+/**
+ * Safari and some Chromium builds save blob: URLs as a bare UUID when:
+ * the <a> is removed before the download starts, the Blob has a renderable
+ * MIME type, or download is only set as a property. Name the File, force
+ * octet-stream, setAttribute("download"), and delay both remove and revoke.
+ */
+export function triggerNamedDownload(data: BlobPart, filename: string) {
+  const file = new File([data], filename, { type: "application/octet-stream" });
+  const url = URL.createObjectURL(file);
   const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.rel = "noopener";
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.setAttribute("rel", "noopener");
+  link.style.display = "none";
   document.body.appendChild(link);
   link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 2500);
 }
 
 export function downloadBriefMarkdown(markdown: string) {
-  downloadTextFile(markdown, BRIEF_MARKDOWN_FILENAME, "text/markdown");
+  triggerNamedDownload(markdown, BRIEF_MARKDOWN_FILENAME);
 }
 
 export function downloadBriefPdf(title: string, body: string) {
@@ -41,14 +50,5 @@ export function downloadBriefPdf(title: string, body: string) {
     doc.text(line, margin, y);
     y += 16;
   }
-  const blob = doc.output("blob");
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = BRIEF_PDF_FILENAME;
-  link.rel = "noopener";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  triggerNamedDownload(doc.output("arraybuffer"), BRIEF_PDF_FILENAME);
 }
