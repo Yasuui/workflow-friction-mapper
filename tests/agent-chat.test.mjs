@@ -26,8 +26,10 @@ test("brief downloads use the public filenames", async () => {
   assert.equal(BRIEF_MARKDOWN_FILENAME, "workflow-optimization-brief.md");
   assert.equal(BRIEF_PDF_FILENAME, "workflow-optimization-brief.pdf");
   const exporter = await readFile(new URL("../lib/brief-export.ts", import.meta.url), "utf8");
-  assert.match(exporter, /\/api\/brief-download/);
+  assert.match(exporter, /showSaveFilePicker/);
+  assert.match(exporter, /suggestedName: filename/);
   assert.doesNotMatch(exporter, /createObjectURL/);
+  assert.doesNotMatch(exporter, /window\.open/);
 });
 
 test("volume is extracted only when stated", () => {
@@ -102,14 +104,11 @@ test("starter volume and attachment headers are not treated as steps", async () 
   assert.ok(wrapper.every((step) => !/please review the attached/i.test(step)));
 });
 
-test("brief exporter posts to a named Content-Disposition route", async () => {
+test("brief exporter uses the file picker with public filenames", async () => {
   const exporter = await readFile(new URL("../lib/brief-export.ts", import.meta.url), "utf8");
-  assert.match(exporter, /\/api\/brief-download/);
-  assert.match(exporter, /window\.open/);
-  assert.doesNotMatch(exporter, /createObjectURL/);
-  assert.doesNotMatch(exporter, /iframe/);
-  const route = await readFile(new URL("../app/api/brief-download/route.ts", import.meta.url), "utf8");
-  assert.match(route, /Content-Disposition/);
-  assert.match(route, /BRIEF_MARKDOWN_FILENAME/);
-  assert.match(route, /BRIEF_PDF_FILENAME/);
+  assert.match(exporter, /showSaveFilePicker/);
+  assert.match(exporter, /BRIEF_MARKDOWN_FILENAME/);
+  assert.match(exporter, /BRIEF_PDF_FILENAME/);
+  assert.match(exporter, /setAttribute\("download", filename\)/);
+  assert.doesNotMatch(exporter, /\/api\/brief-download/);
 });
