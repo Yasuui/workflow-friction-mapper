@@ -105,7 +105,9 @@ test("starter volume and attachment headers are not treated as steps", async () 
 test("brief exporter posts to a named Content-Disposition route", async () => {
   const exporter = await readFile(new URL("../lib/brief-export.ts", import.meta.url), "utf8");
   assert.match(exporter, /\/api\/brief-download/);
+  assert.match(exporter, /window\.open/);
   assert.doesNotMatch(exporter, /createObjectURL/);
+  assert.doesNotMatch(exporter, /iframe/);
   const route = await readFile(new URL("../app/api/brief-download/route.ts", import.meta.url), "utf8");
   assert.match(route, /Content-Disposition/);
   assert.match(route, /BRIEF_MARKDOWN_FILENAME/);
