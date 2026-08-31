@@ -1,4 +1,5 @@
 export const PRODUCT_NAME = "Workflow Friction Mapper";
+export const PRODUCT_SHORT_NAME = "Mapper";
 export const PRODUCT_LINE = "Workflow optimizer";
 export const BRIEF_MARKDOWN_FILENAME = "workflow-optimization-brief.md";
 export const BRIEF_PDF_FILENAME = "workflow-optimization-brief.pdf";
@@ -10,7 +11,7 @@ export const SYSTEM_PROMPT = `You are a senior workflow optimizer.
 
 Ground every claim in the user's messages and files. Label inferences. Never invent hours, dollars, headcount, tools, or SLAs that were not in the material. If volume or constraints are missing, ask one precise question instead of fabricating. Be specific: name the step, the handoff, and the failure mode. No generic "consider RPA" filler.
 
-Reply in 2–5 short spoken sentences. When you can analyze the process, append exactly one fenced block tagged workflow-report with this JSON:
+Reply in 2–5 short spoken sentences. Do not restate the structured brief in chat; the product shows it on a canvas. Point the user to that brief. When you can analyze the process, append exactly one fenced block tagged workflow-report with this JSON:
 {"summary":"spoken paragraph","steps":["ordered current steps"],"friction":[{"step":"","issue":"","evidence":"","kind":"fact"}],"bottlenecks":[{"step":"","issue":"","evidence":"","kind":"fact"}],"opportunities":[{"title":"","rationale":"","evidence":"","kind":"fact"}],"firstMove":"one concrete next action","assumptions":[],"missing":[],"question":null,"hours":{"annualManual":null,"basis":null,"kind":"fact"}}
 kind must be "fact" or "inference". If you must clarify first, omit the fenced block.`;
 
@@ -79,6 +80,53 @@ export interface AgentReport {
 }
 
 const FENCE = /```(?:workflow-report|json)\s*([\s\S]*?)```/i;
+const KIND_PREFIX = /^\s*_?(fact|inference|assumption)\s*:\s*/i;
+
+export function stripKindPrefix(text: string): string {
+  return text.replace(KIND_PREFIX, "").trim();
+}
+
+export function kindLabel(kind: EvidenceKind): "fact" | "assumption" {
+  return kind === "inference" ? "assumption" : "fact";
+}
+
+export function stepIsFriction(report: AgentReport, step: string): boolean {
+  const lower = step.toLowerCase();
+  return [...report.friction, ...report.bottlenecks].some((item) => {
+    const named = item.step.toLowerCase();
+    return lower === named || lower.includes(named) || named.includes(lower);
+  });
+}
+
+export function stepCaption(report: AgentReport, step: string): string {
+  const lower = step.toLowerCase();
+  const match = [...report.friction, ...report.bottlenecks].find((item) => {
+    const named = item.step.toLowerCase();
+    return lower === named || lower.includes(named) || named.includes(lower);
+  });
+  return match ? stripKindPrefix(match.issue) : "";
+}
+
+export function factsAndAssumptions(report: AgentReport): { facts: string[]; assumptions: string[] } {
+  const facts: string[] = [];
+  const assumptions: string[] = [];
+  const push = (kind: EvidenceKind, text: string) => {
+    const clean = stripKindPrefix(text);
+    if (!clean) return;
+    (kind === "inference" ? assumptions : facts).push(clean);
+  };
+  if (report.hours.annualManual != null && report.hours.basis) {
+    push(report.hours.kind, `The workflow volume works out to ${formatHours(report.hours.annualManual)} hours/year (${report.hours.basis}).`);
+  }
+  for (const item of report.friction) push(item.kind, item.evidence);
+  for (const item of report.bottlenecks) push(item.kind, item.evidence);
+  for (const item of report.assumptions) assumptions.push(stripKindPrefix(item));
+  return { facts, assumptions };
+}
+
+export function formatHours(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(value);
+}
 
 export function splitAgentOutput(raw: string): {
   prose: string;
@@ -181,8 +229,8 @@ function asEvidence(value: unknown): EvidenceItem[] {
       const row = item as Partial<EvidenceItem>;
       return {
         step: String(row.step ?? "").trim() || "Workflow",
-        issue: String(row.issue ?? "").trim(),
-        evidence: String(row.evidence ?? "").trim() || "From the provided workflow.",
+        issue: stripKindPrefix(String(row.issue ?? "")),
+        evidence: stripKindPrefix(String(row.evidence ?? "")) || "From the provided workflow.",
         kind: (row.kind === "inference" ? "inference" : "fact") as EvidenceKind,
       };
     })
@@ -195,9 +243,9 @@ function asOpportunities(value: unknown): OpportunityItem[] {
     .map((item) => {
       const row = item as Partial<OpportunityItem>;
       return {
-        title: String(row.title ?? "").trim(),
-        rationale: String(row.rationale ?? "").trim(),
-        evidence: String(row.evidence ?? "").trim() || "From the provided workflow.",
+        title: stripKindPrefix(String(row.title ?? "")),
+        rationale: stripKindPrefix(String(row.rationale ?? "")),
+        evidence: stripKindPrefix(String(row.evidence ?? "")) || "From the provided workflow.",
         kind: (row.kind === "inference" ? "inference" : "fact") as EvidenceKind,
       };
     })

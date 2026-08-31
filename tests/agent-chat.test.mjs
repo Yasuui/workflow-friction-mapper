@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { AGENT_GREETING, BRIEF_MARKDOWN_FILENAME, BRIEF_PDF_FILENAME, parseReportJson, splitAgentOutput } from "../lib/agent-protocol.ts";
+import { AGENT_GREETING, BRIEF_MARKDOWN_FILENAME, BRIEF_PDF_FILENAME, parseReportJson, splitAgentOutput, stripKindPrefix } from "../lib/agent-protocol.ts";
 import { extractFacts } from "../lib/workflow-intake.ts";
 import { analyzeWorkflow } from "../lib/workflow-analysis.ts";
 
@@ -111,4 +111,40 @@ test("brief exporter uses the file picker with public filenames", async () => {
   assert.match(exporter, /BRIEF_PDF_FILENAME/);
   assert.match(exporter, /setAttribute\("download", filename\)/);
   assert.doesNotMatch(exporter, /\/api\/brief-download/);
+});
+
+test("kind prefixes are stripped before display", () => {
+  assert.equal(stripKindPrefix("_fact: Manual review"), "Manual review");
+  assert.equal(stripKindPrefix("fact: Manual review"), "Manual review");
+  assert.equal(stripKindPrefix("assumption: missing fields"), "missing fields");
+  assert.equal(stripKindPrefix("Manual review"), "Manual review");
+});
+
+test("demo spoken reply stays short and points to the canvas", async () => {
+  const source = await readFile(new URL("../lib/demo-agent.ts", import.meta.url), "utf8");
+  assert.match(source, /brief on the right/);
+  assert.match(source, /lowerFirst/);
+  assert.doesNotMatch(source, /const spoken = question/);
+  const fenced = "The main friction is manual data cleanup. I’ve mapped the brief on the right.\n\n```workflow-report\n{\"summary\":\"Longer brief for the download.\",\"steps\":[\"Export\"],\"friction\":[],\"bottlenecks\":[],\"opportunities\":[],\"firstMove\":\"Ship a checklist.\",\"assumptions\":[],\"missing\":[],\"question\":null,\"hours\":{\"annualManual\":260,\"basis\":\"30 minutes × 10 runs/week × 52\",\"kind\":\"fact\"}}\n```";
+  const parsed = splitAgentOutput(fenced);
+  assert.match(parsed.prose, /brief on the right/);
+  assert.ok(parsed.prose.length < 120);
+  assert.equal(parsed.report?.hours.annualManual, 260);
+  assert.doesNotMatch(parsed.prose, /```/);
+});
+
+test("chat keeps the brief on a persistent canvas instead of in the thread", async () => {
+  const chat = await readFile(new URL("../components/WorkflowChat.tsx", import.meta.url), "utf8");
+  const face = await readFile(new URL("../components/MapperFace.tsx", import.meta.url), "utf8");
+  const sticker = await readFile(new URL("../components/StickerAgent.tsx", import.meta.url), "utf8");
+  const card = await readFile(new URL("../components/ReportCard.tsx", import.meta.url), "utf8");
+  assert.match(chat, /BriefCanvas/);
+  assert.match(chat, /studio-panes/);
+  assert.doesNotMatch(chat, /<ReportCard/);
+  assert.match(face, /viewBox="0 0 48 48"/);
+  assert.match(face, /prefers-reduced-motion/);
+  assert.match(face, /mousemove/);
+  assert.doesNotMatch(sticker, /🧭/);
+  assert.match(card, /kind-pill/);
+  assert.doesNotMatch(card, /item\.kind\}: \{item\.evidence/);
 });

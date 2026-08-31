@@ -94,11 +94,16 @@ export function buildDemoReply(material: string): string {
     },
   };
 
-  const spoken = question
-    ? `${summary}\n\n${question}`
-    : summary;
+  const follow = bottlenecks[0] && bottlenecks[0].issue !== friction[0]?.issue
+    ? bottlenecks[0].issue
+    : friction[1]?.issue;
+  let spoken = friction[0]
+    ? `The main friction is ${lowerFirst(friction[0].issue)}${follow ? `, followed by ${lowerFirst(follow)}` : ""}. I’ve mapped the brief on the right.`
+    : "I’ve mapped the current steps and a first move from what you shared. The brief is on the right.";
+  if (question) spoken = `${spoken}\n\n${question}`;
 
   return `${spoken}\n\n\`\`\`workflow-report\n${JSON.stringify(report, null, 2)}\n\`\`\``;
+
 }
 
 function detectFriction(text: string, steps: string[]): EvidenceItem[] {
@@ -228,4 +233,9 @@ function decodeDataUrl(url: string): string {
   } catch {
     return "";
   }
+}
+
+function lowerFirst(value: string): string {
+  if (!value) return value;
+  return value.charAt(0).toLowerCase() + value.slice(1);
 }

@@ -1,18 +1,8 @@
-export type StickerMood = "idle" | "thinking" | "streaming" | "done";
+"use client";
 
-const EMOJI: Record<StickerMood, string> = {
-  idle: "🧭",
-  thinking: "🤔",
-  streaming: "✍️",
-  done: "✅",
-};
+import { MapperFace, type MapperMood } from "@/components/MapperFace";
 
-const LABELS: Record<StickerMood, string> = {
-  idle: "Workflow agent",
-  thinking: "Thinking",
-  streaming: "Writing",
-  done: "Done",
-};
+export type StickerMood = MapperMood;
 
 export function StickerAgent({
   mood,
@@ -23,9 +13,5 @@ export function StickerAgent({
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  return (
-    <span className={`sticker sticker-${size} is-${mood} ${className}`.trim()} role="img" aria-label={LABELS[mood]}>
-      {EMOJI[mood]}
-    </span>
-  );
+  return <MapperFace mood={mood} size={size} className={className} />;
 }
