@@ -117,12 +117,16 @@ export function WorkflowStudio() {
 
   function downloadReport() {
     if (!report) return;
-    const url = URL.createObjectURL(new Blob([reportToMarkdown(report)], { type: "text/markdown" }));
+    const blob = new Blob([reportToMarkdown(report)], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = "workflow-friction-report.md";
+    link.rel = "noopener";
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function reset() {
@@ -161,10 +165,17 @@ export function WorkflowStudio() {
               <span>Include actions, decisions, handoffs, and what “done” means. Short sentences work best.</span>
             </div>
             <label className="field-label" htmlFor="workflow-description">Paste or type the current process</label>
-            <textarea id="workflow-description" value={input.description} onChange={(event) => setInput((current) => ({ ...current, description: event.target.value }))} placeholder="When [trigger] happens, we… Then… If… Finally…" rows={6} maxLength={900} aria-describedby="workflow-help privacy-note" />
+            <textarea id="workflow-description" value={input.description} onChange={(event) => {
+              const description = event.target.value;
+              setInput((current) => ({ ...current, description }));
+              if (description.trim()) setError("");
+            }} placeholder="When [trigger] happens, we… Then… If… Finally…" rows={6} maxLength={900} aria-describedby="workflow-help privacy-note" />
             <div className="example-row" aria-label="Workflow examples">
               <span>Try an example</span>
-              <div>{workflowExamples.map((example) => <button key={example.label} type="button" onClick={() => setInput(example.input)}>{example.label}</button>)}</div>
+              <div>{workflowExamples.map((example) => <button key={example.label} type="button" onClick={() => {
+                setInput(example.input);
+                setError("");
+              }}>{example.label}</button>)}</div>
             </div>
             <div className="character-row"><span>Use synthetic or sanitized details</span><span>{input.description.length}/900</span></div>
             <div className="input-grid">

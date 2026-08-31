@@ -10,7 +10,13 @@ export const metadata: Metadata = {
   creator: "Yonis Diriye",
   keywords: ["workflow automation", "AI automation", "process improvement", "workflow analysis", "privacy-first"],
   alternates: { canonical: "/" },
-  icons: { icon: "/icon.svg", apple: "/apple-icon" },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-icon",
+  },
   openGraph: {
     type: "website",
     url: "/",
@@ -28,5 +34,9 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return (
+    <html lang="en" style={{ colorScheme: "light", backgroundColor: "#f5f4ef", color: "#151515" }}>
+      <body>{children}</body>
+    </html>
+  );
 }

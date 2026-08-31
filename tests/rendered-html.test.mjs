@@ -82,3 +82,25 @@ test("defines one consistent brand and complete social metadata", async () => {
   assert.match(socialImage, /Find the friction before you automate/);
   assert.match(socialImage, /Private, browser-local workflow analysis/);
 });
+
+test("sets a markdown filename, clears chip errors, and serves SEO plus a styled 404", async () => {
+  const studio = await readFile(new URL("../components/WorkflowStudio.tsx", import.meta.url), "utf8");
+  assert.match(studio, /link\.download = "workflow-friction-report\.md"/);
+  assert.match(studio, /appendChild\(link\)/);
+  assert.match(studio, /setInput\(example\.input\);\s*setError\(""\)/s);
+
+  await access(new URL("../app/not-found.tsx", import.meta.url));
+  await access(new URL("../app/robots.ts", import.meta.url));
+  await access(new URL("../app/sitemap.ts", import.meta.url));
+  await access(new URL("../app/favicon.ico", import.meta.url));
+  await access(new URL("../app/icon.svg", import.meta.url));
+
+  const notFound = await readFile(new URL("../app/not-found.tsx", import.meta.url), "utf8");
+  assert.match(notFound, /href="\/"/);
+  assert.match(notFound, /Back to the mapper/);
+
+  const robots = await readFile(new URL("../app/robots.ts", import.meta.url), "utf8");
+  const sitemap = await readFile(new URL("../app/sitemap.ts", import.meta.url), "utf8");
+  assert.match(robots, /sitemap\.xml/);
+  assert.match(sitemap, /workflow-friction-mapper\.vercel\.app/);
+});
