@@ -1,7 +1,9 @@
 import type { FileUIPart } from "ai";
 
-export const FILE_ACCEPT = ".txt,.md,.csv,.json,.pdf,image/*,text/plain,text/markdown,text/csv,application/json,application/pdf";
+export const FILE_ACCEPT = ".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif,.webp,image/*,text/plain,text/markdown,text/csv,application/json,application/pdf";
 export const MAX_FILES = 5;
+export const ATTACH_HINT =
+  "Attach a SOP PDF, process notes (.txt / .md), a CSV export, or a screenshot of the queue/sheet. Excel: export CSV. Word and Excel files (.docx / .xlsx) are not read.";
 const MAX_TEXT_BYTES = 400_000;
 const MAX_TEXT_CHARS = 12_000;
 

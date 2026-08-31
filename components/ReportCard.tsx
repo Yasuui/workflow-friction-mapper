@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import {
+  briefKicker,
+  reportMeaning,
   type AgentReport,
   type EvidenceKind,
   factsAndAssumptions,
@@ -38,6 +40,19 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
   const context = resultContextFromAgent(report);
   const { facts, assumptions } = factsAndAssumptions(report);
   const subtitle = report.steps[0] ? `${report.steps[0]} · updated just now` : "updated just now";
+  const meaning = reportMeaning(report);
+  const doThis = report.doThis.length
+    ? report.doThis
+    : report.opportunities.slice(0, 3).map((item) => ({
+        action: stripKindPrefix(item.title),
+        why: stripKindPrefix(item.rationale),
+        example: stripKindPrefix(item.evidence),
+      }));
+  const workflowSteps = report.intent === "create"
+    ? (report.proposedSteps.length ? report.proposedSteps : report.steps)
+    : report.steps;
+  const workflowLabel = report.intent === "create" ? "Proposed workflow" : "Workflow";
+  const markFriction = report.intent !== "create";
 
   async function copyBrief() {
     await navigator.clipboard.writeText(reportToMarkdown(report));
@@ -51,7 +66,7 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
   }
 
   function downloadPdf() {
-    downloadBriefPdf("Workflow optimization brief", reportToPlainText(report));
+    downloadBriefPdf(briefKicker(report.intent), reportToPlainText(report));
     captureProductEvent("report_downloaded", context);
   }
 
@@ -70,7 +85,7 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
     <section className="report-card" aria-label="Workflow optimization brief">
       <header className="report-card-head">
         <div>
-          <span className="panel-label">Optimization brief</span>
+          <span className="panel-label">{briefKicker(report.intent)}</span>
           <p className="report-kicker">{subtitle}</p>
         </div>
         <div className="results-actions" aria-label="Brief tools">
@@ -115,14 +130,58 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
             ) : null}
           </section>
 
-          {report.steps.length > 0 ? (
+          {meaning ? (
+            <section className="meaning-panel">
+              <span className="panel-label">What this is telling you</span>
+              <p>{meaning}</p>
+            </section>
+          ) : null}
+
+          {doThis.length > 0 ? (
             <section>
-              <span className="panel-label">Workflow spine</span>
+              <span className="panel-label">This week</span>
+              <ol className="dothis-list">
+                {doThis.map((item, index) => (
+                  <li key={`${item.action}-${index}`}>
+                    <span className="dothis-index">{index + 1}</span>
+                    <div>
+                      <strong>{item.action}</strong>
+                      {item.why ? <p>{item.why}</p> : null}
+                      {item.example ? <p className="quiet-example">{item.example}</p> : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : null}
+
+          {report.automations.length > 0 ? (
+            <section>
+              <span className="panel-label">Automation options</span>
+              <div className="automation-grid">
+                {report.automations.map((item) => (
+                  <article key={item.title} className="automation-item">
+                    <div className="automation-head">
+                      <h2>{item.title}</h2>
+                      <span className="effort-pill">{item.effort}</span>
+                    </div>
+                    <p>{item.how}</p>
+                    {item.example ? <p className="quiet-example">{item.example}</p> : null}
+                    {item.tools.length > 0 ? <p className="tool-line">{item.tools.join(" · ")}</p> : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {workflowSteps.length > 0 ? (
+            <section>
+              <span className="panel-label">{workflowLabel}</span>
               <ol className="spine-list">
-                {report.steps.map((step, index) => {
-                  const friction = stepIsFriction(report, step);
-                  const caption = stepCaption(report, step);
-                  const last = index === report.steps.length - 1;
+                {workflowSteps.map((step, index) => {
+                  const friction = markFriction && stepIsFriction(report, step);
+                  const caption = markFriction ? stepCaption(report, step) : "";
+                  const last = index === workflowSteps.length - 1;
                   return (
                     <li key={`${step}-${index}`} className={last ? "is-last" : ""}>
                       {last ? null : <span className={`spine-line ${friction ? "is-friction" : ""}`} />}
@@ -163,28 +222,6 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
                 </article>
               ))}
             </section>
-          ) : null}
-
-          {report.opportunities.length > 0 ? (
-            <section>
-              <span className="panel-label">Opportunities</span>
-              <div className="opportunity-grid">
-                {report.opportunities.map((item, index) => (
-                  <article key={item.title} className="opportunity-item">
-                    <div className="opportunity-index">{index + 1}</div>
-                    <h2>{stripKindPrefix(item.title)}</h2>
-                    <p>{stripKindPrefix(item.rationale)}</p>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {report.firstMove ? (
-            <article className="first-move-panel">
-              <span className="panel-label">Recommended first move</span>
-              <p>{stripKindPrefix(report.firstMove)}</p>
-            </article>
           ) : null}
 
           {facts.length > 0 || assumptions.length > 0 ? (

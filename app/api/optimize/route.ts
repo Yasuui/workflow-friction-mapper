@@ -6,8 +6,8 @@ import {
   type UIMessage,
 } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { SYSTEM_PROMPT } from "@/lib/agent-protocol";
-import { buildDemoReply, collectUserMaterial } from "@/lib/demo-agent";
+import { parseWorkflowIntent, SYSTEM_PROMPT, type WorkflowIntent } from "@/lib/agent-protocol";
+import { buildDemoReply, collectUserMaterial, readMaterialIntent } from "@/lib/demo-agent";
 import { extractPdfFromDataUrl, isPdfPart } from "@/lib/pdf-text";
 import { analyzeWorkflow } from "@/lib/workflow-analysis";
 import { extractFacts } from "@/lib/workflow-intake";
@@ -26,23 +26,24 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const body = (await req.json()) as { messages?: UIMessage[] };
+  const body = (await req.json()) as { messages?: UIMessage[]; intent?: unknown };
   const messages = Array.isArray(body.messages) ? body.messages : [];
+  const intent = readMaterialIntent(messages, body.intent);
 
   if (!process.env.OPENAI_API_KEY) {
-    return streamDemo(messages);
+    return streamDemo(messages, intent);
   }
 
   try {
-    return await streamLive(messages, LIVE_MODEL);
+    return await streamLive(messages, LIVE_MODEL, intent);
   } catch {
-    return streamLive(messages, FALLBACK_MODEL);
+    return streamLive(messages, FALLBACK_MODEL, intent);
   }
 }
 
-async function streamDemo(messages: UIMessage[]) {
+async function streamDemo(messages: UIMessage[], intent: WorkflowIntent) {
   const material = await collectUserMaterial(messages, extractPdfFromDataUrl);
-  const reply = buildDemoReply(material);
+  const reply = buildDemoReply(material, intent);
   const chunks = chunkString(reply, 5);
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
@@ -60,7 +61,7 @@ async function streamDemo(messages: UIMessage[]) {
   return createUIMessageStreamResponse({ stream });
 }
 
-async function streamLive(messages: UIMessage[], modelId: string) {
+async function streamLive(messages: UIMessage[], modelId: string, intent: WorkflowIntent) {
   const prepared = await prepareMessages(messages);
   const material = await collectUserMaterial(messages, extractPdfFromDataUrl);
   const facts = extractFacts(material);
@@ -74,12 +75,13 @@ async function streamLive(messages: UIMessage[], modelId: string) {
           sensitivity: facts.sensitivity ?? "internal",
         }).annualManualHours} hours/year. Use only if those figures were provided.`
       : " No volume was stated. Do not invent hours.";
+  const intentNote = ` Active intent: ${parseWorkflowIntent(intent) ?? "improve"}.`;
 
   const result = streamText({
     model: openai(modelId),
-    system: `${SYSTEM_PROMPT}${localNote}`,
+    system: `${SYSTEM_PROMPT}${intentNote}${localNote}`,
     messages: await convertToModelMessages(prepared),
-    maxOutputTokens: 700,
+    maxOutputTokens: 1400,
     temperature: 0.3,
   });
 

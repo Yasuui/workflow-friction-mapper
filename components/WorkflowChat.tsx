@@ -9,14 +9,20 @@ import { StickerAgent, type StickerMood } from "@/components/StickerAgent";
 import { BriefCanvas } from "@/components/BriefCanvas";
 import {
   AGENT_GREETING,
+  INTAKE_QUESTIONS,
   PRODUCT_LINE,
   PRODUCT_NAME,
   PRODUCT_SHORT_NAME,
+  WORKFLOW_INTENTS,
   WORKFLOW_STARTERS,
+  inferWorkflowIntent,
+  intentLine,
   splitAgentOutput,
+  stripIntentToken,
   type AgentReport,
+  type WorkflowIntent,
 } from "@/lib/agent-protocol";
-import { FILE_ACCEPT, MAX_FILES, filesToChatParts } from "@/lib/chat-attachments";
+import { ATTACH_HINT, FILE_ACCEPT, MAX_FILES, filesToChatParts } from "@/lib/chat-attachments";
 import {
   acquisitionSource,
   captureProductEvent,
@@ -32,7 +38,7 @@ const GREETING_MESSAGE: UIMessage = {
 function textOf(message: UIMessage): string {
   return message.parts
     .filter((part): part is { type: "text"; text: string } => part.type === "text")
-    .map((part) => part.text)
+    .map((part) => stripIntentToken(part.text))
     .join("\n");
 }
 
@@ -82,20 +88,42 @@ export function WorkflowChat() {
   const [mode, setMode] = useState<"demo" | "live">("demo");
   const [canvasReport, setCanvasReport] = useState<AgentReport | null>(null);
   const [mobileCanvasOpen, setMobileCanvasOpen] = useState(false);
+  const [intent, setIntent] = useState<WorkflowIntent | null>(null);
+  const [intakeAsked, setIntakeAsked] = useState(false);
+  const intentRef = useRef<WorkflowIntent | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pinToBottom = useRef(true);
+  intentRef.current = intent;
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/optimize",
+        prepareSendMessagesRequest: ({ messages, body, id, trigger, messageId }) => ({
+          body: {
+            ...(body ?? {}),
+            id,
+            messages,
+            trigger,
+            messageId,
+            intent: intentRef.current ?? undefined,
+          },
+        }),
+      }),
+    [],
+  );
 
   const { messages, sendMessage, setMessages, status, stop } = useChat({
     messages: [GREETING_MESSAGE],
-    transport: new DefaultChatTransport({ api: "/api/optimize" }),
+    transport,
     onFinish: ({ message }) => {
       const report = splitAgentOutput(textOf(message)).report;
       if (!report) return;
       captureProductEvent("analysis_completed", {
         ...resultContextFromAgent(report),
-        primary_opportunity: report.opportunities[0]?.title.slice(0, 40) || "none",
+        primary_opportunity: report.opportunities[0]?.title.slice(0, 40) || report.doThis[0]?.action.slice(0, 40) || "none",
         used_example: usedExampleRef.current,
       });
     },
@@ -103,6 +131,8 @@ export function WorkflowChat() {
 
   const busy = status === "submitted" || status === "streaming";
   const hasUser = messages.some((message) => message.role === "user");
+  const showIntentPicker = !hasUser && !intakeAsked;
+  const canvasOverlayOpen = Boolean(canvasReport && mobileCanvasOpen);
 
   useEffect(() => {
     captureProductEvent("mapper_viewed", { acquisition_source: acquisitionSource() });
@@ -160,21 +190,25 @@ export function WorkflowChat() {
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  async function submitConversation(text: string, files: File[], fromExample = false) {
+  async function submitConversation(text: string, files: File[], fromExample = false, forcedIntent?: WorkflowIntent) {
     const trimmed = text.trim();
     if (!trimmed && files.length === 0) {
       setError("Add a short description of the workflow first.");
       captureProductEvent("analysis_validation_failed", { reason: "missing_description" });
       return;
     }
+    const resolved = inferWorkflowIntent(trimmed, forcedIntent ?? intent);
+    if (!intent) setIntent(resolved);
+    intentRef.current = resolved;
     const { parts, note } = await filesToChatParts(files);
     setError(note);
     if (fromExample) { setUsedExample(true); usedExampleRef.current = true; }
     setDraft("");
     setPendingFiles([]);
     pinToBottom.current = true;
+    const payload = trimmed ? `${intentLine(resolved)}\n${trimmed}` : intentLine(resolved);
     await sendMessage({
-      text: trimmed,
+      text: payload,
       files: parts,
     });
   }
@@ -191,6 +225,28 @@ export function WorkflowChat() {
     }
   }
 
+  function chooseIntent(next: WorkflowIntent) {
+    setIntent(next);
+    setError("");
+    composerRef.current?.focus();
+  }
+
+  function askIntake() {
+    setIntent("create");
+    intentRef.current = "create";
+    setIntakeAsked(true);
+    setError("");
+    setMessages((current) => [
+      ...current,
+      {
+        id: `intake-${Date.now()}`,
+        role: "assistant",
+        parts: [{ type: "text", text: INTAKE_QUESTIONS }],
+      },
+    ]);
+    composerRef.current?.focus();
+  }
+
   function reset() {
     if (canvasReport) captureProductEvent("analysis_reset", resultContextFromAgent(canvasReport));
     stop();
@@ -202,6 +258,9 @@ export function WorkflowChat() {
     usedExampleRef.current = false;
     setCanvasReport(null);
     setMobileCanvasOpen(false);
+    setIntent(null);
+    intentRef.current = null;
+    setIntakeAsked(false);
     pinToBottom.current = true;
     composerRef.current?.focus();
   }
@@ -213,6 +272,10 @@ export function WorkflowChat() {
   }
 
   const thread = messages.length ? messages : [GREETING_MESSAGE];
+  const selectedIntent = WORKFLOW_INTENTS.find((item) => item.id === intent);
+  const placeholder = hasUser
+    ? "Refine the workflow or add context…"
+    : selectedIntent?.placeholder ?? "When a request arrives, we…";
 
   return (
     <>
@@ -241,7 +304,7 @@ export function WorkflowChat() {
         </div>
       </header>
 
-      <div className={`studio-panes ${canvasReport ? "has-canvas" : ""}`}>
+      <div className={`studio-panes ${canvasReport ? "has-canvas" : ""} ${canvasOverlayOpen ? "canvas-open" : ""}`}>
         <section className="conversation" aria-label="Conversation with Mapper">
           <div className="thread" ref={logRef} onScroll={onThreadScroll} role="log" aria-live="polite" aria-label="Workflow conversation">
             <div className="thread-inner">
@@ -291,22 +354,47 @@ export function WorkflowChat() {
 
           <div className="composer-dock">
             <div className="composer-inner">
-              {!hasUser ? (
-                <div className="starter-chips" aria-label="Suggested starter prompts">
-                  {WORKFLOW_STARTERS.map((starter) => (
-                    <button
-                      key={starter.label}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setError("");
-                        captureProductEvent("example_selected", { example_label: starter.analyticsLabel });
-                        void submitConversation(starter.prompt, [], true);
-                      }}
-                    >
-                      {starter.label}
-                    </button>
-                  ))}
+              {showIntentPicker ? (
+                <div className="intent-picker">
+                  <p className="intent-heading">What do you want to do?</p>
+                  <div className="intent-cards">
+                    {WORKFLOW_INTENTS.map((card) => (
+                      <button
+                        key={card.id}
+                        type="button"
+                        className={`intent-card ${intent === card.id ? "is-selected" : ""}`}
+                        disabled={busy}
+                        onClick={() => chooseIntent(card.id)}
+                      >
+                        <strong>{card.title}</strong>
+                        <span>{card.subtitle}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="sample-row">
+                    <p className="sample-label">Or try a sample</p>
+                    <div className="starter-chips" aria-label="Suggested starter prompts">
+                      {WORKFLOW_STARTERS.map((starter) => (
+                        <button
+                          key={starter.label}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setIntent("improve");
+                            intentRef.current = "improve";
+                            setError("");
+                            captureProductEvent("example_selected", { example_label: starter.analyticsLabel });
+                            void submitConversation(starter.prompt, [], true, "improve");
+                          }}
+                        >
+                          {starter.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button type="button" className="intent-helper" disabled={busy} onClick={askIntake}>
+                    I don&apos;t have a workflow yet
+                  </button>
                 </div>
               ) : null}
 
@@ -343,7 +431,7 @@ export function WorkflowChat() {
                       rows={2}
                       value={draft}
                       maxLength={4000}
-                      placeholder={hasUser ? "Refine the workflow or add context…" : "When a request arrives, we…"}
+                      placeholder={placeholder}
                       onChange={(event) => {
                         setDraft(event.target.value);
                         if (event.target.value.trim()) setError("");
@@ -357,6 +445,7 @@ export function WorkflowChat() {
                     </svg>
                   </button>
                 </div>
+                <p className="attach-hint">{ATTACH_HINT}</p>
                 {error ? <p className="form-error" role="alert">{error}</p> : null}
               </form>
               <p className="mode-note">
