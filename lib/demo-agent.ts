@@ -83,7 +83,7 @@ export function buildDemoReply(material: string, intentHint?: WorkflowIntent | n
   const friction = detectFriction(text, usableSteps, intent);
   const bottlenecks = detectBottlenecks(text, usableSteps, friction);
   const opportunities = detectOpportunities(text, usableSteps);
-  const automations = detectAutomations(text, intent);
+  const automations = detectAutomations(text);
   const doThis = detectDoThis(text, intent, automations);
   const proposedSteps = buildProposedSteps(text, usableSteps, intent);
   const missing: string[] = [];
@@ -305,7 +305,7 @@ function detectDoThis(text: string, intent: WorkflowIntent, automations: Automat
   }));
 }
 
-function detectAutomations(text: string, _intent: WorkflowIntent): AutomationItem[] {
+function detectAutomations(text: string): AutomationItem[] {
   const lower = text.toLowerCase();
   if (/excel|spreadsheet|csv|row|field|duplicate/i.test(lower)) {
     return [

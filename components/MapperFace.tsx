@@ -1,6 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+function subscribeReducedMotion(onChange: () => void) {
+  const media = window.matchMedia(REDUCED_MOTION);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia(REDUCED_MOTION).matches;
+}
+
+// Server render and hydration assume motion is allowed; the client store corrects it after mount.
+function serverReducedMotion() {
+  return false;
+}
 
 export type MapperMood = "idle" | "thinking" | "streaming" | "done";
 
@@ -23,15 +40,8 @@ export function MapperFace({
   const rootRef = useRef<HTMLSpanElement>(null);
   const [pupils, setPupils] = useState({ x: 0, y: 0 });
   const [blink, setBlink] = useState(false);
-  const [reduce, setReduce] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setReduce(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
+  const reduce = useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, serverReducedMotion);
+  const canBlink = !reduce && mood === "idle";
 
   useEffect(() => {
     if (reduce) return;
@@ -51,10 +61,7 @@ export function MapperFace({
   }, [reduce]);
 
   useEffect(() => {
-    if (reduce || mood !== "idle") {
-      setBlink(false);
-      return;
-    }
+    if (!canBlink) return;
     let timeout = 0;
     const loop = () => {
       timeout = window.setTimeout(() => {
@@ -66,10 +73,13 @@ export function MapperFace({
       }, 2800 + Math.random() * 1800);
     };
     loop();
-    return () => window.clearTimeout(timeout);
-  }, [mood, reduce]);
+    return () => {
+      window.clearTimeout(timeout);
+      setBlink(false);
+    };
+  }, [canBlink]);
 
-  const squint = mood === "done" || blink;
+  const squint = mood === "done" || (canBlink && blink);
   const scan = (mood === "thinking" || mood === "streaming") && !reduce;
 
   return (

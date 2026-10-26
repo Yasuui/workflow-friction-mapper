@@ -29,6 +29,9 @@ import {
   resultContextFromAgent,
 } from "@/lib/product-analytics";
 
+// The intent travels per request in sendMessage's body, so the transport holds no component state.
+const CHAT_TRANSPORT = new DefaultChatTransport({ api: "/api/optimize" });
+
 const GREETING_MESSAGE: UIMessage = {
   id: "agent-greeting",
   role: "assistant",
@@ -49,25 +52,18 @@ function fileNames(message: UIMessage): string[] {
 }
 
 function StreamProse({ text, caret }: { text: string; caret?: boolean }) {
-  const committedRef = useRef("");
-  const [chunks, setChunks] = useState<string[]>(() => (text ? [text] : []));
-
-  useEffect(() => {
-    if (!text) {
-      committedRef.current = "";
-      setChunks([]);
-      return;
-    }
-    if (!text.startsWith(committedRef.current)) {
-      committedRef.current = text;
-      setChunks([text]);
-      return;
-    }
-    const delta = text.slice(committedRef.current.length);
-    if (!delta) return;
-    committedRef.current = text;
-    setChunks((current) => [...current, delta]);
-  }, [text]);
+  // Each streamed delta becomes its own span so only new tokens animate.
+  // State is adjusted during render (not in an effect) to avoid a second paint per token.
+  const [stream, setStream] = useState(() => ({ committed: text, chunks: text ? [text] : [] }));
+  if (stream.committed !== text) {
+    const continues = Boolean(text) && text.startsWith(stream.committed);
+    const delta = continues ? text.slice(stream.committed.length) : "";
+    setStream({
+      committed: text,
+      chunks: !text ? [] : continues ? [...stream.chunks, delta] : [text],
+    });
+  }
+  const { chunks } = stream;
 
   return (
     <p>
@@ -90,37 +86,19 @@ export function WorkflowChat() {
   const [mobileCanvasOpen, setMobileCanvasOpen] = useState(false);
   const [intent, setIntent] = useState<WorkflowIntent | null>(null);
   const [intakeAsked, setIntakeAsked] = useState(false);
-  const intentRef = useRef<WorkflowIntent | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pinToBottom = useRef(true);
-  intentRef.current = intent;
-
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/optimize",
-        prepareSendMessagesRequest: ({ messages, body, id, trigger, messageId }) => ({
-          body: {
-            ...(body ?? {}),
-            id,
-            messages,
-            trigger,
-            messageId,
-            intent: intentRef.current ?? undefined,
-          },
-        }),
-      }),
-    [],
-  );
 
   const { messages, sendMessage, setMessages, status, stop } = useChat({
     messages: [GREETING_MESSAGE],
-    transport,
+    transport: CHAT_TRANSPORT,
     onFinish: ({ message }) => {
       const report = splitAgentOutput(textOf(message)).report;
       if (!report) return;
+      setCanvasReport(report);
+      setMobileCanvasOpen(true);
       captureProductEvent("analysis_completed", {
         ...resultContextFromAgent(report),
         primary_opportunity: report.opportunities[0]?.title.slice(0, 40) || report.doThis[0]?.action.slice(0, 40) || "none",
@@ -153,16 +131,6 @@ export function WorkflowChat() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (status === "submitted" || status === "streaming") return;
-    const last = [...messages].reverse().find((message) => message.role === "assistant");
-    if (!last) return;
-    const report = splitAgentOutput(textOf(last)).report;
-    if (!report) return;
-    setCanvasReport(report);
-    setMobileCanvasOpen(true);
-  }, [messages, status]);
 
   useEffect(() => {
     if (!pinToBottom.current || !logRef.current) return;
@@ -199,7 +167,6 @@ export function WorkflowChat() {
     }
     const resolved = inferWorkflowIntent(trimmed, forcedIntent ?? intent);
     if (!intent) setIntent(resolved);
-    intentRef.current = resolved;
     const { parts, note } = await filesToChatParts(files);
     setError(note);
     if (fromExample) { setUsedExample(true); usedExampleRef.current = true; }
@@ -207,10 +174,7 @@ export function WorkflowChat() {
     setPendingFiles([]);
     pinToBottom.current = true;
     const payload = trimmed ? `${intentLine(resolved)}\n${trimmed}` : intentLine(resolved);
-    await sendMessage({
-      text: payload,
-      files: parts,
-    });
+    await sendMessage({ text: payload, files: parts }, { body: { intent: resolved } });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -233,7 +197,6 @@ export function WorkflowChat() {
 
   function askIntake() {
     setIntent("create");
-    intentRef.current = "create";
     setIntakeAsked(true);
     setError("");
     setMessages((current) => [
@@ -259,7 +222,6 @@ export function WorkflowChat() {
     setCanvasReport(null);
     setMobileCanvasOpen(false);
     setIntent(null);
-    intentRef.current = null;
     setIntakeAsked(false);
     pinToBottom.current = true;
     composerRef.current?.focus();
@@ -381,7 +343,6 @@ export function WorkflowChat() {
                           disabled={busy}
                           onClick={() => {
                             setIntent("improve");
-                            intentRef.current = "improve";
                             setError("");
                             captureProductEvent("example_selected", { example_label: starter.analyticsLabel });
                             void submitConversation(starter.prompt, [], true, "improve");
