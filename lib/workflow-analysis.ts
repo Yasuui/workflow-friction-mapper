@@ -126,7 +126,7 @@ function isProcessStep(step: string): boolean {
   if (/^(attachment|image attached)\b/i.test(step)) return false;
   if (/^pdf\b/i.test(step) && /attach/i.test(step)) return false;
   if (/^(txt|md|csv|json|pdf):?$/i.test(step)) return false;
-  if (/^data is\b/i.test(step)) return false;
+  if (/^(?:(?:data(?:\s+is)?|sensitivity)\s*[:=]?\s*)?(?:public|internal|sensitive)(?:\s+data)?$/i.test(step)) return false;
   if (/please review the attached/i.test(step)) return false;
   if (/^attached file/i.test(step)) return false;
   const volumeOnly = /\b(\d+\s*)?(minutes?|times a week|runs? per week|handoffs?)\b/i.test(step);

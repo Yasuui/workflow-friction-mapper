@@ -109,8 +109,8 @@ export function buildDemoReply(material: string, intentHint?: WorkflowIntent | n
 
   const meaning = buildMeaning(text, intent, friction, firstMove, proposedSteps);
   const summary = annual
-    ? `This process has ${usableSteps.length} visible steps and ${friction.length} friction points I can name from your description. From the volume you stated, that is about ${annual} manual hours per year. First move: ${firstMove}`
-    : `This process has ${usableSteps.length} visible steps and ${friction.length} friction points I can name from your description. I did not estimate hours because volume was not stated. First move: ${firstMove}`;
+    ? `This process has ${usableSteps.length} visible steps and ${friction.length} possible friction points inferred from your description. From the volume you stated, that is about ${annual} manual hours per year. First move: ${firstMove}`
+    : `This process has ${usableSteps.length} visible steps and ${friction.length} possible friction points inferred from your description. I did not estimate hours because volume was not stated. First move: ${firstMove}`;
 
   const report: AgentReport = {
     intent,
@@ -152,11 +152,11 @@ function spokenFor(intent: WorkflowIntent, first: EvidenceItem | undefined, foll
   }
   if (intent === "diagnose") {
     return first
-      ? `The break is ${lowerFirst(first.issue)}. What’s going wrong is on the right, with this-week moves and a couple of automation options.`
+      ? `A possible break is ${lowerFirst(first.issue)}. The brief on the right has this-week moves and a couple of automation options to check.`
       : "I’ve mapped what’s going wrong from what you shared. The brief is on the right.";
   }
   return first
-    ? `The main friction is ${lowerFirst(first.issue)}${follow ? `, followed by ${lowerFirst(follow)}` : ""}. I’ve mapped the brief on the right.`
+    ? `Possible friction: ${lowerFirst(first.issue)}${follow ? `; ${lowerFirst(follow)}` : ""}. I’ve mapped the brief on the right; check these assumptions with the process owner.`
     : "I’ve mapped the current steps and a first move from what you shared. The brief is on the right.";
 }
 
@@ -170,7 +170,7 @@ function buildMeaning(
   const lower = text.toLowerCase();
   if (/excel|spreadsheet|csv|row|field|duplicate/i.test(lower)) {
     if (intent === "diagnose") {
-      return "The process is stalling at intake: rows are cleaned by hand before anything can enter the case queue. Fix validation and the return path first.";
+      return "Intake may be a bottleneck if rows need manual cleanup before entering the case queue. Check validation and the return path first.";
     }
     if (intent === "create") {
       return "Stand up intake so complete requests go to the queue and incomplete ones bounce with a reason. Do not start with a daily cleanup ritual.";
@@ -191,7 +191,7 @@ function buildMeaning(
     return `This brief is telling you to stand up a simple process that starts with ${first}, names who touches it next, and makes done visible. Take the first move this week; do not wait for a platform.`;
   }
   if (intent === "diagnose" && friction[0]) {
-    return `This brief is telling you the process is breaking at ${lowerFirst(friction[0].issue)}. Fix that step before adding more work around it.`;
+    return `This brief suggests a possible break: ${lowerFirst(friction[0].issue)}. Check that step with the process owner before adding more work around it.`;
   }
   return `This brief is telling you to take one concrete move this week: ${lowerFirst(firstMove)}`;
 }
@@ -449,28 +449,28 @@ function namedTools(text: string, fallback: string[]): string[] {
 function detectFriction(text: string, steps: string[], intent: WorkflowIntent): EvidenceItem[] {
   const lower = text.toLowerCase();
   const items: EvidenceItem[] = [];
-  const push = (step: string, issue: string, evidence: string, kind: EvidenceItem["kind"] = "fact") => {
+  const push = (step: string, issue: string, evidence: string, kind: EvidenceItem["kind"] = "inference") => {
     if (!items.some((item) => item.issue === issue)) items.push({ step, issue, evidence, kind });
   };
   const stepFor = (re: RegExp, fallback: string) => steps.find((step) => re.test(step)) ?? fallback;
 
   if (/excel|spreadsheet|csv|copy|paste|row/i.test(lower)) {
-    push(stepFor(/excel|export|row|field|spreadsheet/i, steps[0] ?? "Intake"), "Manual data cleanup before work can start", "You mentioned spreadsheet, export, copy/paste, or row checks.");
+    push(stepFor(/excel|export|row|field|spreadsheet/i, steps[0] ?? "Intake"), "Data cleanup may delay the next step", "You mentioned spreadsheet, export, copy/paste, or row checks.");
   }
   if (/send|handoff|escalate|assign|notify/i.test(lower)) {
-    push(stepFor(/send|escalat|assign|notify|hand/i, steps[1] ?? steps[0] ?? "Handoff"), "Work waits on a person-to-person handoff", "You named send, assign, notify, or escalate steps.");
+    push(stepFor(/send|escalat|assign|notify|hand/i, steps[1] ?? steps[0] ?? "Handoff"), "A person-to-person handoff may delay work", "You named send, assign, notify, or escalate steps.");
   }
   if (/remind|follow[- ]up|due date/i.test(lower)) {
-    push(stepFor(/remind|follow|due/i, "Reminders"), "Reminders depend on someone remembering to nudge", "You described reminders, follow-up, or due dates.");
+    push(stepFor(/remind|follow|due/i, "Reminders"), "Reminders may depend on someone remembering to nudge", "You described reminders, follow-up, or due dates.");
   }
   if (/review|approv|check required|incomplete/i.test(lower)) {
-    push(stepFor(/review|approv|check|incomplete/i, "Review"), "A human review gate sits on the critical path", "You described review, approval, or incomplete-item checks.");
+    push(stepFor(/review|approv|check|incomplete/i, "Review"), "A human review gate may sit on the critical path", "You described review, approval, or incomplete-item checks.");
   }
   if (/each day|daily|monitor|status/i.test(lower)) {
-    push(stepFor(/monitor|status|day|daily/i, "Monitoring"), "Status is polled instead of exception-based", "You described daily checks, monitoring, or status lookups.");
+    push(stepFor(/monitor|status|day|daily/i, "Monitoring"), "Status checks may be polling rather than exception-based", "You described daily checks, monitoring, or status lookups.");
   }
   if (items.length === 0 && steps.length && intent !== "create") {
-    push(steps[0], "The process is still held together by memory and sequential effort", "Ordered steps were provided without a system of record for state.", "inference");
+    push(steps[0], "State tracking may need a shared record", "Ordered steps were provided; a system of record for state was not specified.", "inference");
   }
   return items.slice(0, 4);
 }
@@ -480,9 +480,9 @@ function detectBottlenecks(text: string, steps: string[], friction: EvidenceItem
     return [
       {
         step: steps.find((step) => /excel|export|row|field/i.test(step)) ?? steps[0] ?? "Intake",
-        issue: "Intake quality sets the pace for every later handoff",
-        evidence: "Cleanup or validation is required before downstream steps.",
-        kind: "fact",
+        issue: "Intake quality may set the pace for later handoffs",
+        evidence: "Spreadsheet or row work was mentioned; whether cleanup delays later steps needs checking.",
+        kind: "inference",
       },
     ];
   }
@@ -490,9 +490,9 @@ function detectBottlenecks(text: string, steps: string[], friction: EvidenceItem
     return [
       {
         step: steps.find((step) => /monitor|status|day/i.test(step)) ?? "Monitoring",
-        issue: "Daily status checks cap throughput at human polling speed",
-        evidence: "You described recurring status checks rather than exception alerts.",
-        kind: "fact",
+        issue: "Recurring status checks may limit throughput",
+        evidence: "Monitoring or status checks were mentioned; whether they poll rather than use alerts needs checking.",
+        kind: "inference",
       },
     ];
   }
@@ -507,7 +507,7 @@ function detectOpportunities(text: string, steps: string[]): OpportunityItem[] {
       title: "Validate incoming rows at the source",
       rationale: "Flag missing fields and duplicates before anyone re-exports the sheet.",
       evidence: quote(text, /excel|spreadsheet|csv|row|duplicate|field/i, steps[0]),
-      kind: "fact",
+      kind: "inference",
     });
   }
   if (/meeting|notes|action items/i.test(lower)) {
@@ -515,7 +515,7 @@ function detectOpportunities(text: string, steps: string[]): OpportunityItem[] {
       title: "Capture notes and actions once",
       rationale: "One structured action list removes re-typing after the meeting.",
       evidence: quote(text, /meeting|notes|action/i, steps[0]),
-      kind: "fact",
+      kind: "inference",
     });
   }
   if (/remind|follow[- ]up|notify|teams/i.test(lower)) {
@@ -523,7 +523,7 @@ function detectOpportunities(text: string, steps: string[]): OpportunityItem[] {
       title: "Trigger reminders from due dates",
       rationale: "Send the next nudge only when an owner or date requires it.",
       evidence: quote(text, /remind|follow|notify|teams/i, "Reminders"),
-      kind: "fact",
+      kind: "inference",
     });
   }
   if (/case|ticket|queue|monitor|status/i.test(lower)) {
@@ -531,7 +531,7 @@ function detectOpportunities(text: string, steps: string[]): OpportunityItem[] {
       title: "Watch cases by exception",
       rationale: "Surface only items near a deadline or stuck in a state — not every row, every day.",
       evidence: quote(text, /case|ticket|monitor|status|queue/i, "Case monitoring"),
-      kind: "fact",
+      kind: "inference",
     });
   }
   if (/onboarding|new employee|course|access/i.test(lower)) {
@@ -539,7 +539,7 @@ function detectOpportunities(text: string, steps: string[]): OpportunityItem[] {
       title: "Orchestrate onboarding from one checklist",
       rationale: "Sequence access and training from a shared state instead of separate chases.",
       evidence: quote(text, /onboarding|employee|course|access/i, "Onboarding"),
-      kind: "fact",
+      kind: "inference",
     });
   }
   if (items.length === 0) {

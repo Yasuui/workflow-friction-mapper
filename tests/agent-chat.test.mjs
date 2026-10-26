@@ -14,7 +14,7 @@ import {
 } from "../lib/agent-protocol.ts";
 import { buildDemoReply } from "../lib/demo-agent.ts";
 import { extractFacts } from "../lib/workflow-intake.ts";
-import { analyzeWorkflow } from "../lib/workflow-analysis.ts";
+import { analyzeWorkflow, extractSteps } from "../lib/workflow-analysis.ts";
 
 test("landing greeting explains how to use the agent", () => {
   assert.match(AGENT_GREETING, /attach a SOP|describe the job|paste the steps/i);
@@ -223,4 +223,40 @@ test("chat keeps the brief on a persistent canvas instead of in the thread", asy
   assert.match(css, /studio-panes\.canvas-open/);
   assert.match(css, /pointer-events:\s*none/);
   assert.match(css, /:has\(\.canvas-open\) \.app-footer/);
+});
+
+
+test("all demo starters omit data classification and volume from current steps", () => {
+  for (const starter of WORKFLOW_STARTERS) {
+    const { report } = splitAgentOutput(buildDemoReply(starter.prompt, "improve"));
+    assert.ok(report, starter.label);
+    assert.ok(report.steps.length >= 4, starter.label);
+    assert.ok(report.steps.every((step) => !/^(?:internal|public|sensitive)(?: data)?$|^data is|minutes|times a week|handoffs/i.test(step)), starter.label);
+    assert.doesNotMatch(reportToMarkdown(report), /^\d+\. (?:Internal|Public|Sensitive)(?: data)?$/m);
+  }
+});
+
+test("step extraction removes only classification labels and preserves actions on data", () => {
+  assert.deepEqual(
+    extractSteps("Internal data. Public. Sensitive data. Data is internal. Sensitivity: sensitive. Review internal data. Data is reviewed before publishing. Send sensitive data to the approved reviewer."),
+    ["Review internal data", "Data is reviewed before publishing", "Send sensitive data to the approved reviewer"],
+  );
+});
+
+test("demo deductions stay inferences in the brief and Markdown export", () => {
+  for (const starter of WORKFLOW_STARTERS) {
+    const { report, prose } = splitAgentOutput(buildDemoReply(starter.prompt, "improve"));
+    assert.ok(report, starter.label);
+    const deductions = [...report.friction, ...report.bottlenecks, ...report.opportunities];
+    assert.ok(deductions.length > 0, starter.label);
+    assert.ok(deductions.every((item) => item.kind === "inference"), starter.label);
+    const markdown = reportToMarkdown(report);
+    for (const item of deductions) {
+      assert.ok(markdown.includes(`(inference: ${item.evidence})`), item.evidence);
+      assert.ok(!markdown.includes(`(fact: ${item.evidence})`), item.evidence);
+    }
+    assert.match(prose, /possible friction/i);
+    assert.equal(report.hours.kind, "fact");
+    assert.ok(report.hours.annualManual > 0);
+  }
 });
