@@ -8,6 +8,20 @@ A chat agent that reads a workflow you share and returns a grounded brief: frict
 
 Built by [Yonis Diriye](https://www.linkedin.com/in/yonisdiriye/).
 
+[![CI](https://github.com/Yasuui/workflow-friction-mapper/actions/workflows/ci.yml/badge.svg)](https://github.com/Yasuui/workflow-friction-mapper/actions/workflows/ci.yml)
+
+## Status
+
+| Part | State |
+| --- | --- |
+| Public site | Live on Vercel, running in **demo mode** |
+| Demo agent | Deterministic: rule-based step extraction and evidence labelling, covered by tests |
+| Live model path | Built (`gpt-5-mini` via the Vercel AI SDK) but **not enabled in production** and not yet evaluated against a golden set |
+| API boundary | Validated: roles, part types, sizes and inline attachments are checked before any parsing or model call |
+| Users | No accounts, no stored workflow data |
+
+What this is not yet: a measured product. There are no outcome metrics beyond opt-in usefulness feedback, and the live model has not been graded.
+
 ## Why it exists
 
 Teams often automate a process before they understand it. This agent is the first conversation: extract the real steps, name the friction, and pick one reversible move.
@@ -74,21 +88,41 @@ Open `http://localhost:3000`. Demo mode works with no API key. To use the live m
 ## Verify
 
 ```bash
-npm test
-npm run lint
+npm run lint   # ESLint with the React Compiler rules
+npm test       # tsc --noEmit, next build, then node --test against the built output
 ```
+
+CI runs both on every pull request with no model key, so the suite never calls a paid API.
+
+What the tests cover:
+
+- **Evidence honesty.** Keyword-derived friction, bottlenecks and opportunities are always labelled as inferences, in the card and in the Markdown export. Hours appear only when the user stated volume.
+- **Step extraction.** Data classifications ("Internal data") are not counted as steps; real actions on data are kept.
+- **API boundary.** The payloads the UI really sends pass. System-role injection, remote file URLs, mislabelled binaries, malformed JSON and oversized bodies are rejected with 4xx, never 500.
+- **Rendering and export.** The pre-rendered shell, file names, SEO routes and the data-URL download path.
+
+Not covered yet: live-model output quality, browser end-to-end tests, and mobile layouts on physical devices.
 
 ## Product architecture
 
 ```text
-Chat + attachments
+Chat + attachments (type and size checked in the browser)
       |
-/api/optimize  (demo stream, or gpt-5-mini when keyed)
+/api/optimize
+  ├─ request guard (lib/optimize-request.ts)  → 400 / 413 / 415 with a readable message
+  ├─ no key:  deterministic demo agent, streamed
+  └─ keyed:   gpt-5-mini, PDF text extracted server-side, stated volume passed as arithmetic only
       |
-Spoken reply + structured brief in-thread
+Spoken reply + structured brief (fenced JSON, parsed and validated client-side)
       |
 Copy / workflow-optimization-brief.md / .pdf
 ```
+
+Design choices worth knowing:
+
+- **Facts vs inferences is a data field, not wording.** Every evidence item carries `kind: "fact" | "inference"`, so the UI, the Markdown and the PDF can't drift apart.
+- **The model never does arithmetic.** Annual hours are computed in code from the user's own numbers and handed to the model as a fact.
+- **The browser history is untrusted.** The server rebuilds each message from an allowlist instead of forwarding the client's payload.
 
 Core stack: Next.js, React, TypeScript, Vercel AI SDK, Tailwind CSS, and Vercel.
 
