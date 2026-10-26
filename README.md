@@ -121,7 +121,7 @@ Copy / workflow-optimization-brief.md / .pdf
 Design choices worth knowing:
 
 - **Facts vs inferences is a data field, not wording.** Every evidence item carries `kind: "fact" | "inference"`, so the UI, the Markdown and the PDF can't drift apart.
-- **The model never does arithmetic.** Annual hours are computed in code from the user's own numbers and handed to the model as a fact.
+- **Hours come from code, not the model.** Annual hours are computed from the user's own numbers and passed to the model as a fact; the prompt forbids inventing them. The parser does not yet reject a figure the model makes up anyway. That check belongs in the live-model eval set.
 - **The browser history is untrusted.** The server rebuilds each message from an allowlist instead of forwarding the client's payload.
 
 Core stack: Next.js, React, TypeScript, Vercel AI SDK, Tailwind CSS, and Vercel.
