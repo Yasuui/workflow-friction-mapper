@@ -11,6 +11,7 @@ import { buildDemoReply, collectUserMaterial, readMaterialIntent } from "@/lib/d
 import { extractPdfFromDataUrl, isPdfPart } from "@/lib/pdf-text";
 import { analyzeWorkflow } from "@/lib/workflow-analysis";
 import { extractFacts } from "@/lib/workflow-intake";
+import { readOptimizeRequest } from "@/lib/optimize-request";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -26,14 +27,19 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const body = (await req.json()) as { messages?: UIMessage[]; intent?: unknown };
-  const messages = Array.isArray(body.messages) ? body.messages : [];
-  const intent = readMaterialIntent(messages, body.intent);
+  const request = await readOptimizeRequest(req);
+  if (!request.ok) {
+    return Response.json({ error: request.error }, { status: request.status });
+  }
+  const { messages } = request.value;
+  const intent = readMaterialIntent(messages, request.value.intent);
 
   if (!process.env.OPENAI_API_KEY) {
     return streamDemo(messages, intent);
   }
 
+  // The fallback covers errors raised while setting up the call. Provider errors after the
+  // stream has started reach the client as a generic stream error and are not retried.
   try {
     return await streamLive(messages, LIVE_MODEL, intent);
   } catch {

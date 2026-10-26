@@ -45,6 +45,17 @@ function textOf(message: UIMessage): string {
     .join("\n");
 }
 
+/** The API answers rejected requests with { error }; the transport surfaces that body as the message. */
+function readableChatError(failure: Error): string {
+  try {
+    const parsed = JSON.parse(failure.message) as { error?: unknown };
+    if (typeof parsed.error === "string" && parsed.error) return parsed.error;
+  } catch {
+    // Not a JSON error body; fall through to the generic message.
+  }
+  return "Mapper could not finish that reply. Try again, or start a new conversation.";
+}
+
 function fileNames(message: UIMessage): string[] {
   return message.parts
     .filter((part): part is { type: "file"; filename?: string; mediaType: string; url: string } => part.type === "file")
@@ -94,6 +105,7 @@ export function WorkflowChat() {
   const { messages, sendMessage, setMessages, status, stop } = useChat({
     messages: [GREETING_MESSAGE],
     transport: CHAT_TRANSPORT,
+    onError: (failure) => setError(readableChatError(failure)),
     onFinish: ({ message }) => {
       const report = splitAgentOutput(textOf(message)).report;
       if (!report) return;
