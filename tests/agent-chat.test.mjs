@@ -29,8 +29,9 @@ test("optimize API route exists and prefers gpt-5-mini", async () => {
   assert.match(route, /OPENAI_API_KEY/);
   assert.match(route, /gpt-5-mini/);
   assert.match(route, /gpt-4.1-mini/);
-  assert.match(route, /streamDemo/);
-  assert.match(route, /streamText/);
+  // Live and demo replies both go through the guaranteed stream (behaviour tested in agent-stream.test.mjs).
+  assert.match(route, /streamAgentReply/);
+  assert.match(route, /readOptimizeRequest/);
   assert.match(route, /intent/);
 });
 
