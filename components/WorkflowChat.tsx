@@ -22,7 +22,7 @@ import {
   type AgentReport,
   type WorkflowIntent,
 } from "@/lib/agent-protocol";
-import { ATTACH_HINT, FILE_ACCEPT, MAX_FILES, filesToChatParts } from "@/lib/chat-attachments";
+import { ATTACH_HINT, FILE_ACCEPT, MAX_FILES, attachmentBudgetError, filesToChatParts } from "@/lib/chat-attachments";
 import {
   acquisitionSource,
   captureProductEvent,
@@ -180,6 +180,12 @@ export function WorkflowChat() {
     const resolved = inferWorkflowIntent(trimmed, forcedIntent ?? intent);
     if (!intent) setIntent(resolved);
     const { parts, note } = await filesToChatParts(files);
+    // Check the combined size before clearing the composer, so the person can remove a file.
+    const budgetError = attachmentBudgetError(messages, parts);
+    if (budgetError) {
+      setError(budgetError);
+      return;
+    }
     setError(note);
     if (fromExample) { setUsedExample(true); usedExampleRef.current = true; }
     setDraft("");

@@ -6,6 +6,7 @@ import {
   MAX_FILES_PER_REQUEST,
   MAX_MESSAGES,
   MAX_TEXT_PART_CHARS,
+  MAX_TOTAL_TEXT_CHARS,
   readOptimizeRequest,
   validateOptimizeBody,
 } from "../lib/optimize-request.ts";
@@ -123,4 +124,20 @@ test("rejects remote URLs, unsupported types and mislabelled binaries", () => {
     const result = validateOptimizeBody({ messages: [user([text("see attached"), part])] });
     assert.deepEqual([result.ok, result.status], [false, status], part.url.slice(0, 40));
   }
+});
+
+test("the composer's attachment budget keeps any accepted set of files under the API body limit", async () => {
+  const { attachmentBudgetError, MAX_CONVERSATION_ATTACHMENT_CHARS } = await import("../lib/chat-attachments.ts");
+  // Two 1.55 MB PDFs pass the per-file cap but not together (base64 ≈ 4.13 MB).
+  const pdf = { type: "file", mediaType: "application/pdf", filename: "a.pdf", url: `data:application/pdf;base64,${"A".repeat(2_066_668)}` };
+  assert.match(attachmentBudgetError([], [pdf, { ...pdf, filename: "b.pdf" }]), /too large to send together/);
+  assert.equal(attachmentBudgetError([], [pdf]), "");
+
+  // Earlier turns are re-sent, so their attachments count too.
+  const history = [{ id: "u0", role: "user", parts: [{ type: "text", text: "notes" }, pdf] }];
+  assert.match(attachmentBudgetError(history, [{ ...pdf, filename: "b.pdf" }]), /already in this conversation/);
+
+  // Anything the composer allows fits the server's body limit with the conversation's text.
+  const envelope = JSON.stringify({ messages: [user([text("x".repeat(MAX_TOTAL_TEXT_CHARS))])] }).length;
+  assert.ok(MAX_CONVERSATION_ATTACHMENT_CHARS + envelope + 10_000 < MAX_BODY_BYTES);
 });
