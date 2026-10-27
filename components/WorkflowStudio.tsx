@@ -7,8 +7,6 @@ import { captureProductEvent } from "@/lib/product-analytics";
 export function WorkflowStudio() {
   return (
     <main className="app-shell">
-      <div className="ambient ambient-one" aria-hidden="true" />
-      <div className="ambient ambient-two" aria-hidden="true" />
       <WorkflowChat />
       <footer className="app-footer">
         <span className="footer-brand"><FlowMark /> Workflow Friction Mapper</span>
