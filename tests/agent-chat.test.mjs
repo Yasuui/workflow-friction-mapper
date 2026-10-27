@@ -171,12 +171,13 @@ test("kind prefixes are stripped before display", () => {
 
 test("demo spoken reply stays short and points to the canvas", async () => {
   const source = await readFile(new URL("../lib/demo-agent.ts", import.meta.url), "utf8");
-  assert.match(source, /brief on the right/);
+  assert.doesNotMatch(source, /on the right/);
+  assert.match(source, /in the brief/);
   assert.match(source, /lowerFirst/);
   assert.doesNotMatch(source, /const spoken = question/);
-  const fenced = "The main friction is manual data cleanup. I’ve mapped the brief on the right.\n\n```workflow-report\n{\"summary\":\"Longer brief for the download.\",\"steps\":[\"Export\"],\"friction\":[],\"bottlenecks\":[],\"opportunities\":[],\"firstMove\":\"Ship a checklist.\",\"assumptions\":[],\"missing\":[],\"question\":null,\"hours\":{\"annualManual\":260,\"basis\":\"30 minutes × 10 runs/week × 52\",\"kind\":\"fact\"}}\n```";
+  const fenced = "The main friction is manual data cleanup. I’ve mapped it in the brief.\n\n```workflow-report\n{\"summary\":\"Longer brief for the download.\",\"steps\":[\"Export\"],\"friction\":[],\"bottlenecks\":[],\"opportunities\":[],\"firstMove\":\"Ship a checklist.\",\"assumptions\":[],\"missing\":[],\"question\":null,\"hours\":{\"annualManual\":260,\"basis\":\"30 minutes × 10 runs/week × 52\",\"kind\":\"fact\"}}\n```";
   const parsed = splitAgentOutput(fenced);
-  assert.match(parsed.prose, /brief on the right/);
+  assert.match(parsed.prose, /in the brief/);
   assert.ok(parsed.prose.length < 120);
   assert.equal(parsed.report?.hours.annualManual, 260);
   assert.doesNotMatch(parsed.prose, /```/);
@@ -192,7 +193,8 @@ test("demo Excel brief includes meaning and a worked automation example", () => 
   assert.ok(report.automations.some((item) => item.example && item.example.length > 10));
   assert.match(report.automations.map((item) => `${item.title} ${item.example}`).join(" "), /Status|Missing:|Request ID/);
   assert.match(reportToMarkdown(report), /What this is telling you/);
-  assert.match(prose, /brief on the right/);
+  assert.match(prose, /in the brief/);
+  assert.doesNotMatch(prose, /on the right/);
 });
 
 test("chat keeps the brief on a persistent canvas instead of in the thread", async () => {
@@ -227,6 +229,21 @@ test("chat keeps the brief on a persistent canvas instead of in the thread", asy
   assert.match(css, /:has\(\.canvas-open\) \.app-footer/);
 });
 
+test("brief overlay traps focus, touch targets stay 40px, and readable copy avoids --faint", async () => {
+  const chat = await readFile(new URL("../components/WorkflowChat.tsx", import.meta.url), "utf8");
+  const canvas = await readFile(new URL("../components/BriefCanvas.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(chat, /<header className="app-chrome" inert=\{canvasModal\}>/);
+  assert.match(chat, /className="conversation"[^>]*inert=\{canvasModal\}/);
+  assert.match(chat, /Drafting the brief/);
+  assert.match(canvas, /aria-modal=\{modal \|\| undefined\}/);
+  assert.match(css, /@media \(pointer:coarse\), \(max-width:640px\) \{[^}]*min-height:40px/);
+  for (const rule of ["composer-meta", "app-footer", "quiet-example", "evidence-step", "segmented button span"]) {
+    const body = css.match(new RegExp(`\\.${rule.replace(" ", "\\s+")} \\{([^}]*)\\}`))?.[1] ?? "";
+    assert.ok(body, rule);
+    assert.doesNotMatch(body, /--faint/, rule);
+  }
+});
 
 test("all demo starters omit data classification and volume from current steps", () => {
   for (const starter of WORKFLOW_STARTERS) {

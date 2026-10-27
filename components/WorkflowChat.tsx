@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
@@ -99,6 +99,19 @@ function briefSummary(report: AgentReport): string {
   return parts.join(" · ");
 }
 
+// Below this width the brief is a full-screen overlay rather than a side pane.
+const OVERLAY_QUERY = "(max-width: 1023px)";
+
+function subscribeOverlayLayout(onChange: () => void) {
+  const query = window.matchMedia(OVERLAY_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function useOverlayLayout(): boolean {
+  return useSyncExternalStore(subscribeOverlayLayout, () => window.matchMedia(OVERLAY_QUERY).matches, () => false);
+}
+
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
@@ -143,6 +156,9 @@ export function WorkflowChat() {
   const hasUser = messages.some((message) => message.role === "user");
   const showIntentPicker = !hasUser && !intakeAsked;
   const canvasOverlayOpen = Boolean(canvasReport && mobileCanvasOpen);
+  // While the overlay covers the screen, everything behind it is inert so focus stays in the brief.
+  const overlayLayout = useOverlayLayout();
+  const canvasModal = canvasOverlayOpen && overlayLayout;
 
   useEffect(() => {
     captureProductEvent("mapper_viewed", { acquisition_source: acquisitionSource() });
@@ -182,8 +198,9 @@ export function WorkflowChat() {
   // "/" jumps to the composer from anywhere; Escape closes the brief overlay on small screens.
   useEffect(() => {
     function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape" && mobileCanvasOpen) {
-        setMobileCanvasOpen(false);
+      if (canvasModal) {
+        // The composer sits behind the overlay, so "/" does nothing until the brief closes.
+        if (event.key === "Escape") setMobileCanvasOpen(false);
         return;
       }
       if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey && !isTypingTarget(event.target)) {
@@ -193,7 +210,14 @@ export function WorkflowChat() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mobileCanvasOpen]);
+  }, [canvasModal]);
+
+  // Focus can only return to the composer once the content behind the overlay is no longer inert.
+  const wasModal = useRef(false);
+  useEffect(() => {
+    if (wasModal.current && !canvasModal) composerRef.current?.focus();
+    wasModal.current = canvasModal;
+  }, [canvasModal]);
 
   const waitingForToken = useMemo(() => {
     if (status === "submitted") return true;
@@ -314,7 +338,7 @@ export function WorkflowChat() {
 
   return (
     <>
-      <header className="app-chrome">
+      <header className="app-chrome" inert={canvasModal}>
         <Link className="wordmark" href="/">
           <span className="mark" aria-hidden="true"><FlowMark /></span>
           <span className="wordmark-copy">
@@ -342,7 +366,7 @@ export function WorkflowChat() {
       </header>
 
       <div className={`studio-panes ${canvasReport ? "has-canvas" : ""} ${canvasOverlayOpen ? "canvas-open" : ""}`}>
-        <section className="conversation" aria-label="Conversation with Mapper">
+        <section className="conversation" aria-label="Conversation with Mapper" inert={canvasModal}>
           <div className="thread" ref={logRef} onScroll={onThreadScroll} role="log" aria-live="polite" aria-label="Workflow conversation">
             <div className="thread-inner">
               {showIntentPicker ? (
@@ -422,6 +446,17 @@ export function WorkflowChat() {
                               {files.map((name) => <li key={name}><ClipIcon />{name}</li>)}
                             </ul>
                           ) : null}
+                        </div>
+                      ) : null}
+                      {streamingThis && parsed.streamingFence ? (
+                        // The prose is done but the brief is still arriving; keep the wait visible.
+                        <div className="brief-chip is-pending" role="status">
+                          <span className="brief-chip-icon" aria-hidden="true"><BriefIcon /></span>
+                          <span className="brief-chip-copy">
+                            <strong>Drafting the brief</strong>
+                            <span>Mapping steps, friction and first moves</span>
+                          </span>
+                          <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
                         </div>
                       ) : null}
                       {report && !streamingThis ? (
@@ -526,10 +561,8 @@ export function WorkflowChat() {
             report={canvas.report}
             usedExample={usedExample}
             open={mobileCanvasOpen}
-            onClose={() => {
-              setMobileCanvasOpen(false);
-              composerRef.current?.focus();
-            }}
+            modal={canvasModal}
+            onClose={() => setMobileCanvasOpen(false)}
           />
         ) : null}
       </div>
