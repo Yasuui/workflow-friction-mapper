@@ -148,16 +148,16 @@ export function buildDemoReply(material: string, intentHint?: WorkflowIntent | n
 
 function spokenFor(intent: WorkflowIntent, first: EvidenceItem | undefined, follow: string | undefined): string {
   if (intent === "create") {
-    return "I’ve proposed a new workflow from the job you described. The brief on the right is the process to stand up, plus this week’s first moves.";
+    return "I’ve proposed a new workflow from the job you described. The brief is the process to stand up, plus this week’s first moves.";
   }
   if (intent === "diagnose") {
     return first
-      ? `A possible break is ${lowerFirst(first.issue)}. The brief on the right has this-week moves and a couple of automation options to check.`
-      : "I’ve mapped what’s going wrong from what you shared. The brief is on the right.";
+      ? `A possible break is ${lowerFirst(first.issue)}. The brief has this-week moves and a couple of automation options to check.`
+      : "I’ve mapped what’s going wrong from what you shared. The brief is ready.";
   }
   return first
-    ? `Possible friction: ${lowerFirst(first.issue)}${follow ? `; ${lowerFirst(follow)}` : ""}. I’ve mapped the brief on the right; check these assumptions with the process owner.`
-    : "I’ve mapped the current steps and a first move from what you shared. The brief is on the right.";
+    ? `Possible friction: ${lowerFirst(first.issue)}${follow ? `; ${lowerFirst(follow)}` : ""}. I’ve mapped it in the brief; check these assumptions with the process owner.`
+    : "I’ve mapped the current steps and a first move from what you shared. The brief is ready.";
 }
 
 function buildMeaning(
