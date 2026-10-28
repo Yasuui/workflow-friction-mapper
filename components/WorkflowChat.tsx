@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
@@ -15,14 +15,16 @@ import {
   PRODUCT_SHORT_NAME,
   WORKFLOW_INTENTS,
   WORKFLOW_STARTERS,
+  briefKicker,
   inferWorkflowIntent,
   intentLine,
   splitAgentOutput,
+  stepIsFriction,
   stripIntentToken,
   type AgentReport,
   type WorkflowIntent,
 } from "@/lib/agent-protocol";
-import { ATTACH_HINT, FILE_ACCEPT, MAX_FILES, filesToChatParts } from "@/lib/chat-attachments";
+import { ATTACH_HINT, FILE_ACCEPT, MAX_FILES, attachmentBudgetError, filesToChatParts } from "@/lib/chat-attachments";
 import {
   acquisitionSource,
   captureProductEvent,
@@ -86,6 +88,35 @@ function StreamProse({ text, caret }: { text: string; caret?: boolean }) {
   );
 }
 
+function briefSummary(report: AgentReport): string {
+  const steps = report.intent === "create" && report.proposedSteps.length ? report.proposedSteps : report.steps;
+  const parts = [`${steps.length} ${steps.length === 1 ? "step" : "steps"}`];
+  if (report.intent !== "create") {
+    const flagged = steps.filter((step) => stepIsFriction(report, step)).length;
+    parts.push(`${flagged} with friction`);
+  }
+  if (report.doThis.length) parts.push(`${report.doThis.length} ${report.doThis.length === 1 ? "action" : "actions"}`);
+  return parts.join(" · ");
+}
+
+// Below this width the brief is a full-screen overlay rather than a side pane.
+const OVERLAY_QUERY = "(max-width: 1023px)";
+
+function subscribeOverlayLayout(onChange: () => void) {
+  const query = window.matchMedia(OVERLAY_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function useOverlayLayout(): boolean {
+  return useSyncExternalStore(subscribeOverlayLayout, () => window.matchMedia(OVERLAY_QUERY).matches, () => false);
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
+}
+
 export function WorkflowChat() {
   const [draft, setDraft] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -93,7 +124,8 @@ export function WorkflowChat() {
   const [usedExample, setUsedExample] = useState(false);
   const usedExampleRef = useRef(false);
   const [mode, setMode] = useState<"demo" | "live">("demo");
-  const [canvasReport, setCanvasReport] = useState<AgentReport | null>(null);
+  // The canvas shows one brief at a time; older briefs in the thread can be reopened by message id.
+  const [canvas, setCanvas] = useState<{ id: string; report: AgentReport } | null>(null);
   const [mobileCanvasOpen, setMobileCanvasOpen] = useState(false);
   const [intent, setIntent] = useState<WorkflowIntent | null>(null);
   const [intakeAsked, setIntakeAsked] = useState(false);
@@ -101,6 +133,7 @@ export function WorkflowChat() {
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pinToBottom = useRef(true);
+  const canvasReport = canvas?.report ?? null;
 
   const { messages, sendMessage, setMessages, status, stop } = useChat({
     messages: [GREETING_MESSAGE],
@@ -109,7 +142,7 @@ export function WorkflowChat() {
     onFinish: ({ message }) => {
       const report = splitAgentOutput(textOf(message)).report;
       if (!report) return;
-      setCanvasReport(report);
+      setCanvas({ id: message.id, report });
       setMobileCanvasOpen(true);
       captureProductEvent("analysis_completed", {
         ...resultContextFromAgent(report),
@@ -123,6 +156,9 @@ export function WorkflowChat() {
   const hasUser = messages.some((message) => message.role === "user");
   const showIntentPicker = !hasUser && !intakeAsked;
   const canvasOverlayOpen = Boolean(canvasReport && mobileCanvasOpen);
+  // While the overlay covers the screen, everything behind it is inert so focus stays in the brief.
+  const overlayLayout = useOverlayLayout();
+  const canvasModal = canvasOverlayOpen && overlayLayout;
 
   useEffect(() => {
     captureProductEvent("mapper_viewed", { acquisition_source: acquisitionSource() });
@@ -145,9 +181,43 @@ export function WorkflowChat() {
   }, []);
 
   useEffect(() => {
-    if (!pinToBottom.current || !logRef.current) return;
-    logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [messages, status]);
+    if (!logRef.current) return;
+    // The empty state reads top-down; a conversation follows its newest turn.
+    if (showIntentPicker) logRef.current.scrollTop = 0;
+    else if (pinToBottom.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [messages, status, showIntentPicker]);
+
+  // Grow the composer with its content, up to the CSS max-height.
+  useLayoutEffect(() => {
+    const field = composerRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  }, [draft]);
+
+  // "/" jumps to the composer from anywhere; Escape closes the brief overlay on small screens.
+  useEffect(() => {
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (canvasModal) {
+        // The composer sits behind the overlay, so "/" does nothing until the brief closes.
+        if (event.key === "Escape") setMobileCanvasOpen(false);
+        return;
+      }
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey && !isTypingTarget(event.target)) {
+        event.preventDefault();
+        composerRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canvasModal]);
+
+  // Focus can only return to the composer once the content behind the overlay is no longer inert.
+  const wasModal = useRef(false);
+  useEffect(() => {
+    if (wasModal.current && !canvasModal) composerRef.current?.focus();
+    wasModal.current = canvasModal;
+  }, [canvasModal]);
 
   const waitingForToken = useMemo(() => {
     if (status === "submitted") return true;
@@ -180,6 +250,12 @@ export function WorkflowChat() {
     const resolved = inferWorkflowIntent(trimmed, forcedIntent ?? intent);
     if (!intent) setIntent(resolved);
     const { parts, note } = await filesToChatParts(files);
+    // Check the combined size before clearing the composer, so the person can remove a file.
+    const budgetError = attachmentBudgetError(messages, parts);
+    if (budgetError) {
+      setError(budgetError);
+      return;
+    }
     setError(note);
     if (fromExample) { setUsedExample(true); usedExampleRef.current = true; }
     setDraft("");
@@ -191,12 +267,14 @@ export function WorkflowChat() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     void submitConversation(draft, pendingFiles);
   }
 
   function handleComposerKey(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
+      if (busy) return;
       void submitConversation(draft, pendingFiles);
     }
   }
@@ -222,6 +300,12 @@ export function WorkflowChat() {
     composerRef.current?.focus();
   }
 
+  function openBrief(id: string, report: AgentReport) {
+    setCanvas({ id, report });
+    setMobileCanvasOpen(true);
+    document.getElementById("brief-canvas")?.focus({ preventScroll: true });
+  }
+
   function reset() {
     if (canvasReport) captureProductEvent("analysis_reset", resultContextFromAgent(canvasReport));
     stop();
@@ -231,7 +315,7 @@ export function WorkflowChat() {
     setError("");
     setUsedExample(false);
     usedExampleRef.current = false;
-    setCanvasReport(null);
+    setCanvas(null);
     setMobileCanvasOpen(false);
     setIntent(null);
     setIntakeAsked(false);
@@ -245,7 +329,8 @@ export function WorkflowChat() {
     pinToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 72;
   }
 
-  const thread = messages.length ? messages : [GREETING_MESSAGE];
+  // The greeting's guidance lives in the empty state, so the thread starts at the first real turn.
+  const thread = messages.filter((message) => message.id !== GREETING_MESSAGE.id);
   const selectedIntent = WORKFLOW_INTENTS.find((item) => item.id === intent);
   const placeholder = hasUser
     ? "Refine the workflow or add context…"
@@ -253,9 +338,9 @@ export function WorkflowChat() {
 
   return (
     <>
-      <header className="app-chrome">
+      <header className="app-chrome" inert={canvasModal}>
         <Link className="wordmark" href="/">
-          <span className="mark mark-idle" aria-hidden="true"><FlowMark /></span>
+          <span className="mark" aria-hidden="true"><FlowMark /></span>
           <span className="wordmark-copy">
             <strong>{PRODUCT_SHORT_NAME}</strong>
             <small>{PRODUCT_NAME}</small>
@@ -263,29 +348,80 @@ export function WorkflowChat() {
           <span className="sr-only">{PRODUCT_LINE}</span>
         </Link>
         <div className="chrome-actions">
+          <span className={`mode-badge is-${mode}`} title={mode === "live" ? "Replies come from the live model" : "Replies are a deterministic demo grounded in what you share"}>
+            <i aria-hidden="true" />
+            {mode === "live" ? "Live model" : "Demo mode"}
+          </span>
           {canvasReport ? (
-            <>
-              <span className="sync-pill"><i />Brief synced</span>
-              <button type="button" className="ghost-button canvas-toggle" onClick={() => setMobileCanvasOpen(true)}>
-                Brief
-              </button>
-            </>
+            <button type="button" className="ghost-button is-outlined canvas-toggle" onClick={() => setMobileCanvasOpen(true)}>
+              <BriefIcon />
+              Brief
+            </button>
           ) : null}
-          <button type="button" className="ghost-button" onClick={reset}>
+          <button type="button" className="ghost-button is-outlined" onClick={reset}>
             <PlusIcon />
-            New
+            New analysis
           </button>
         </div>
       </header>
 
       <div className={`studio-panes ${canvasReport ? "has-canvas" : ""} ${canvasOverlayOpen ? "canvas-open" : ""}`}>
-        <section className="conversation" aria-label="Conversation with Mapper">
+        <section className="conversation" aria-label="Conversation with Mapper" inert={canvasModal}>
           <div className="thread" ref={logRef} onScroll={onThreadScroll} role="log" aria-live="polite" aria-label="Workflow conversation">
             <div className="thread-inner">
-              <div className="conversation-intro">
-                <span className="panel-label">Conversation</span>
-                <h1>Turn your workflow into a plan you can build.</h1>
-              </div>
+              {showIntentPicker ? (
+                <section className="empty-state" aria-labelledby="empty-title">
+                  <div className="empty-head">
+                    <span className="empty-eyebrow"><StickerAgent mood="idle" size="sm" />{PRODUCT_SHORT_NAME} is ready</span>
+                    <h1 id="empty-title">Turn your workflow into a plan you can build.</h1>
+                    <p>{AGENT_GREETING}</p>
+                  </div>
+                  <div className="intent-picker">
+                    <div>
+                      <p className="intent-heading" id="intent-heading">What do you want to do?</p>
+                      <div className="intent-cards" role="group" aria-labelledby="intent-heading">
+                        {WORKFLOW_INTENTS.map((card) => (
+                          <button
+                            key={card.id}
+                            type="button"
+                            className={`intent-card ${intent === card.id ? "is-selected" : ""}`}
+                            aria-pressed={intent === card.id}
+                            disabled={busy}
+                            onClick={() => chooseIntent(card.id)}
+                          >
+                            <span className="intent-radio" aria-hidden="true" />
+                            <strong>{card.title}</strong>
+                            <span>{card.subtitle}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="sample-row">
+                      <p className="sample-label">Or try a sample</p>
+                      <div className="starter-chips" aria-label="Suggested starter prompts">
+                        {WORKFLOW_STARTERS.map((starter) => (
+                          <button
+                            key={starter.label}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setIntent("improve");
+                              setError("");
+                              captureProductEvent("example_selected", { example_label: starter.analyticsLabel });
+                              void submitConversation(starter.prompt, [], true, "improve");
+                            }}
+                          >
+                            {starter.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <button type="button" className="intent-helper" disabled={busy} onClick={askIntake}>
+                      I don&apos;t have a workflow yet
+                    </button>
+                  </div>
+                </section>
+              ) : null}
               {thread.map((message, index) => {
                 const raw = textOf(message);
                 const parsed = message.role === "assistant" ? splitAgentOutput(raw) : { prose: raw, report: null, streamingFence: false };
@@ -293,10 +429,11 @@ export function WorkflowChat() {
                 const streamingThis = isLast && message.role === "assistant" && status === "streaming";
                 const files = fileNames(message);
                 const turnMood: StickerMood = streamingThis ? "streaming" : (parsed.report ? "done" : "idle");
+                const report = parsed.report;
                 return (
                   <article key={message.id} className={`turn ${message.role}`}>
                     {message.role === "assistant" ? (
-                      <StickerAgent mood={turnMood} size="md" />
+                      <StickerAgent mood={turnMood} size="sm" />
                     ) : null}
                     <div className="turn-body">
                       {parsed.prose || files.length ? (
@@ -306,10 +443,35 @@ export function WorkflowChat() {
                           ) : null}
                           {files.length > 0 ? (
                             <ul className="message-files">
-                              {files.map((name) => <li key={name}>{name}</li>)}
+                              {files.map((name) => <li key={name}><ClipIcon />{name}</li>)}
                             </ul>
                           ) : null}
                         </div>
+                      ) : null}
+                      {streamingThis && parsed.streamingFence ? (
+                        // The prose is done but the brief is still arriving; keep the wait visible.
+                        <div className="brief-chip is-pending" role="status">
+                          <span className="brief-chip-icon" aria-hidden="true"><BriefIcon /></span>
+                          <span className="brief-chip-copy">
+                            <strong>Drafting the brief</strong>
+                            <span>Mapping steps, friction and first moves</span>
+                          </span>
+                          <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
+                        </div>
+                      ) : null}
+                      {report && !streamingThis ? (
+                        <button
+                          type="button"
+                          className={`brief-chip ${canvas?.id === message.id ? "is-active" : ""}`}
+                          onClick={() => openBrief(message.id, report)}
+                        >
+                          <span className="brief-chip-icon" aria-hidden="true"><BriefIcon /></span>
+                          <span className="brief-chip-copy">
+                            <strong>{briefKicker(report.intent)}</strong>
+                            <span>{briefSummary(report)}</span>
+                          </span>
+                          <span className="brief-chip-cta">{canvas?.id === message.id ? "Showing" : "Open"}</span>
+                        </button>
                       ) : null}
                     </div>
                   </article>
@@ -317,9 +479,10 @@ export function WorkflowChat() {
               })}
               {waitingForToken ? (
                 <article className="turn assistant thinking-turn">
-                  <StickerAgent mood="thinking" size="md" />
+                  <StickerAgent mood="thinking" size="sm" />
                   <div className="bubble assistant thinking-bubble">
-                    <span className="thinking-dots" aria-label="Thinking"><i /><i /><i /></span>
+                    <span>Reading your workflow</span>
+                    <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
                   </div>
                 </article>
               ) : null}
@@ -328,54 +491,12 @@ export function WorkflowChat() {
 
           <div className="composer-dock">
             <div className="composer-inner">
-              {showIntentPicker ? (
-                <div className="intent-picker">
-                  <p className="intent-heading">What do you want to do?</p>
-                  <div className="intent-cards">
-                    {WORKFLOW_INTENTS.map((card) => (
-                      <button
-                        key={card.id}
-                        type="button"
-                        className={`intent-card ${intent === card.id ? "is-selected" : ""}`}
-                        disabled={busy}
-                        onClick={() => chooseIntent(card.id)}
-                      >
-                        <strong>{card.title}</strong>
-                        <span>{card.subtitle}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="sample-row">
-                    <p className="sample-label">Or try a sample</p>
-                    <div className="starter-chips" aria-label="Suggested starter prompts">
-                      {WORKFLOW_STARTERS.map((starter) => (
-                        <button
-                          key={starter.label}
-                          type="button"
-                          disabled={busy}
-                          onClick={() => {
-                            setIntent("improve");
-                            setError("");
-                            captureProductEvent("example_selected", { example_label: starter.analyticsLabel });
-                            void submitConversation(starter.prompt, [], true, "improve");
-                          }}
-                        >
-                          {starter.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <button type="button" className="intent-helper" disabled={busy} onClick={askIntake}>
-                    I don&apos;t have a workflow yet
-                  </button>
-                </div>
-              ) : null}
-
               <form className="chat-composer" onSubmit={handleSubmit}>
                 {pendingFiles.length > 0 ? (
                   <ul className="pending-files" aria-label="Files to attach">
                     {pendingFiles.map((file, index) => (
                       <li key={`${file.name}-${index}`}>
+                        <ClipIcon />
                         <span>{file.name}</span>
                         <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setPendingFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}>×</button>
                       </li>
@@ -383,7 +504,7 @@ export function WorkflowChat() {
                   </ul>
                 ) : null}
                 <div className="composer-row">
-                  <label className="attach-button">
+                  <label className="attach-button" title="Attach a file">
                     <span className="sr-only">Attach a file</span>
                     <input
                       ref={fileRef}
@@ -401,7 +522,7 @@ export function WorkflowChat() {
                     <textarea
                       id="workflow-message"
                       ref={composerRef}
-                      rows={2}
+                      rows={1}
                       value={draft}
                       maxLength={4000}
                       placeholder={placeholder}
@@ -412,32 +533,36 @@ export function WorkflowChat() {
                       onKeyDown={handleComposerKey}
                     />
                   </label>
-                  <button className="send-button" type="submit" disabled={busy} aria-label="Send message">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 19V5m0 0 5 5M12 5 7 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+                  {busy ? (
+                    <button className="send-button is-stop" type="button" onClick={() => stop()} aria-label="Stop the reply">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" /></svg>
+                    </button>
+                  ) : (
+                    <button className="send-button" type="submit" aria-label="Send message">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 19V5m0 0 5 5M12 5 7 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
-                <p className="attach-hint">{ATTACH_HINT}</p>
-                {error ? <p className="form-error" role="alert">{error}</p> : null}
               </form>
-              <p className="mode-note">
-                <span>{mode === "live" ? "Your input is sent to OpenAI. Avoid sharing sensitive data." : "Sample mode: review and complete the plan before building."}</span>
-                <span className="mode-pill"><i />{mode === "live" ? "Live model" : "Demo mode"}</span>
-              </p>
+              {error ? <p className="form-error" role="alert">{error}</p> : null}
+              <div className={`composer-meta ${hasUser ? "is-quiet" : ""}`}>
+                <p className="attach-hint">{mode === "live" ? "Your input is sent to OpenAI. Avoid sharing sensitive data. " : "Sample mode: review and complete the plan before building. "}{ATTACH_HINT}</p>
+                <span className="kbd-hint" aria-hidden="true"><kbd>Enter</kbd> send <kbd>/</kbd> focus</span>
+              </div>
             </div>
           </div>
         </section>
 
-        {canvasReport ? (
+        {canvas ? (
           <BriefCanvas
-            report={canvasReport}
+            key={canvas.id}
+            report={canvas.report}
             usedExample={usedExample}
             open={mobileCanvasOpen}
-            onClose={() => {
-              setMobileCanvasOpen(false);
-              requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".canvas-toggle")?.focus());
-            }}
+            modal={canvasModal}
+            onClose={() => setMobileCanvasOpen(false)}
           />
         ) : null}
       </div>
@@ -449,6 +574,23 @@ function PlusIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BriefIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M8 9h8M8 12.5h8M8 16h5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ClipIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+      <path d="M8 7.5v8.2a4 4 0 0 0 8 0V7.2a2.7 2.7 0 0 0-5.4 0v8.1a1.4 1.4 0 0 0 2.8 0V8.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }

@@ -11,8 +11,6 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <main className="page-shell app-shell">
-      <div className="ambient ambient-one" aria-hidden="true" />
-      <div className="ambient ambient-two" aria-hidden="true" />
       <nav className="nav-wrap" aria-label="Primary navigation">
         <Link className="wordmark" href="/">
           <span className="mark" aria-hidden="true"><FlowMark /></span>

@@ -1,17 +1,12 @@
-import {
-  convertToModelMessages,
-  createUIMessageStream,
-  createUIMessageStreamResponse,
-  streamText,
-  type UIMessage,
-} from "ai";
+import type { UIMessage } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { parseWorkflowIntent, SYSTEM_PROMPT, type WorkflowIntent } from "@/lib/agent-protocol";
+import { parseWorkflowIntent, SYSTEM_PROMPT } from "@/lib/agent-protocol";
 import { buildDemoReply, collectUserMaterial, readMaterialIntent } from "@/lib/demo-agent";
 import { extractPdfFromDataUrl, isPdfPart } from "@/lib/pdf-text";
 import { analyzeWorkflow } from "@/lib/workflow-analysis";
 import { extractFacts } from "@/lib/workflow-intake";
 import { readOptimizeRequest } from "@/lib/optimize-request";
+import { streamAgentReply } from "@/lib/agent-stream";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -33,43 +28,13 @@ export async function POST(req: Request) {
   }
   const { messages } = request.value;
   const intent = readMaterialIntent(messages, request.value.intent);
+  const material = await collectUserMaterial(messages, extractPdfFromDataUrl);
+  const demoReply = async () => buildDemoReply(material, intent);
 
   if (!process.env.OPENAI_API_KEY) {
-    return streamDemo(messages, intent);
+    return streamAgentReply({ attempts: [], system: "", messages, demoReply });
   }
 
-  // The fallback covers errors raised while setting up the call. Provider errors after the
-  // stream has started reach the client as a generic stream error and are not retried.
-  try {
-    return await streamLive(messages, LIVE_MODEL, intent);
-  } catch {
-    return streamLive(messages, FALLBACK_MODEL, intent);
-  }
-}
-
-async function streamDemo(messages: UIMessage[], intent: WorkflowIntent) {
-  const material = await collectUserMaterial(messages, extractPdfFromDataUrl);
-  const reply = buildDemoReply(material, intent);
-  const chunks = chunkString(reply, 5);
-  const stream = createUIMessageStream({
-    execute: async ({ writer }) => {
-      const id = "demo-text";
-      writer.write({ type: "start" });
-      writer.write({ type: "text-start", id });
-      for (const delta of chunks) {
-        writer.write({ type: "text-delta", id, delta });
-        await delay(11);
-      }
-      writer.write({ type: "text-end", id });
-      writer.write({ type: "finish" });
-    },
-  });
-  return createUIMessageStreamResponse({ stream });
-}
-
-async function streamLive(messages: UIMessage[], modelId: string, intent: WorkflowIntent) {
-  const prepared = await prepareMessages(messages);
-  const material = await collectUserMaterial(messages, extractPdfFromDataUrl);
   const facts = extractFacts(material);
   const localNote =
     facts.minutesPerRun != null && facts.runsPerWeek != null
@@ -83,15 +48,16 @@ async function streamLive(messages: UIMessage[], modelId: string, intent: Workfl
       : " No volume was stated. Do not invent hours.";
   const intentNote = ` Active intent: ${parseWorkflowIntent(intent) ?? "improve"}.`;
 
-  const result = streamText({
-    model: openai(modelId),
+  return streamAgentReply({
+    attempts: [
+      { model: openai(LIVE_MODEL), label: LIVE_MODEL },
+      { model: openai(FALLBACK_MODEL), label: FALLBACK_MODEL },
+    ],
     system: `${SYSTEM_PROMPT}${intentNote}${localNote}`,
-    messages: await convertToModelMessages(prepared),
-    maxOutputTokens: 2400,
-    temperature: 0.3,
+    messages: await prepareMessages(messages),
+    demoReply,
+    onModelError: (label, error) => console.error(`[optimize] ${label} failed`, error),
   });
-
-  return result.toUIMessageStreamResponse();
 }
 
 async function prepareMessages(messages: UIMessage[]): Promise<UIMessage[]> {
@@ -114,14 +80,4 @@ async function prepareMessages(messages: UIMessage[]): Promise<UIMessage[]> {
     next.push({ ...message, parts });
   }
   return next;
-}
-
-function chunkString(value: string, size: number): string[] {
-  const chunks: string[] = [];
-  for (let index = 0; index < value.length; index += size) chunks.push(value.slice(index, index + size));
-  return chunks;
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

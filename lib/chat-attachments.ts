@@ -20,6 +20,38 @@ export const TEXT_MEDIA_TYPES = {
 } as const;
 const MAX_TEXT_CHARS = 12_000;
 
+/**
+ * Every turn re-sends the whole conversation, attachments included, and the API rejects
+ * bodies over 4 MB. Attachments across the conversation share this budget, which leaves
+ * room for the JSON envelope and the conversation's text.
+ */
+export const MAX_CONVERSATION_ATTACHMENT_CHARS = 3_700_000;
+
+type PartsCarrier = { parts: ReadonlyArray<{ type: string; url?: unknown }> };
+
+/** Characters of inline attachment data a request will carry for these messages plus the new parts. */
+export function attachmentChars(messages: ReadonlyArray<PartsCarrier>, nextParts: ReadonlyArray<FileUIPart> = []): number {
+  let total = 0;
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (part.type === "file" && typeof part.url === "string") total += part.url.length;
+    }
+  }
+  for (const part of nextParts) total += part.url.length;
+  return total;
+}
+
+/** A user-facing reason the attachments cannot be sent, or "" when they fit. */
+export function attachmentBudgetError(messages: ReadonlyArray<PartsCarrier>, nextParts: ReadonlyArray<FileUIPart>): string {
+  if (nextParts.length === 0) return "";
+  const total = attachmentChars(messages, nextParts);
+  if (total <= MAX_CONVERSATION_ATTACHMENT_CHARS) return "";
+  const earlier = attachmentChars(messages);
+  return earlier > 0
+    ? "These files don't fit alongside the files already in this conversation. Remove one, or start a new conversation with New."
+    : "These files are too large to send together. Remove one, or attach a smaller export.";
+}
+
 export type ChatFileKind = "txt" | "md" | "csv" | "json" | "pdf" | "image" | "other";
 
 export function classifyChatFile(name: string, mime = ""): ChatFileKind {

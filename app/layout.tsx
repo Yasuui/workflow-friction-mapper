@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import WorkflowPostHog from "@/components/WorkflowPostHog";
 import "./globals.css";
 
@@ -34,9 +34,17 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c0c0e" },
+  ],
+};
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" style={{ colorScheme: "dark", backgroundColor: "#10151c", color: "#f2f4ff" }}>
+    <html lang="en">
       <body><WorkflowPostHog />{children}</body>
     </html>
   );
