@@ -2,7 +2,7 @@
 
 ![Workflow Friction Mapper — Find the friction before you automate](docs/screenshots/social-card.png)
 
-A chat agent that reads a workflow you share and returns a grounded brief: friction, bottlenecks, opportunities, and a first move.
+A chat agent that turns a workflow into a proposed automation plan, with friction, open questions and a first move.
 
 **[Open the live tool](https://workflow-friction-mapper.vercel.app)** · **[View the source](https://github.com/Yasuui/workflow-friction-mapper)**
 
@@ -21,6 +21,8 @@ Built by [Yonis Diriye](https://www.linkedin.com/in/yonisdiriye/).
 | Users | No accounts, no stored workflow data |
 
 What this is not yet: a measured product. There are no outcome metrics beyond opt-in usefulness feedback, and the live model has not been graded.
+
+The build-plan interface is under review. Before enabling a public paid model, add durable abuse and spend controls, evaluate live output against representative cases, and verify the deployed journey. The local key is not a production deployment or evidence of model quality.
 
 ## Why it exists
 
@@ -67,6 +69,8 @@ See [PRIVACY.md](PRIVACY.md). Analytics definitions live in [docs/analytics-even
 
 ## What the brief includes
 
+- A proposed build plan: trigger, inputs, steps, human review, failure handling and checks before launch
+- Details that need confirmation, rather than a claim that the automation is already running
 - Ordered current steps
 - Friction and bottlenecks with evidence (fact vs inference)
 - Opportunities tied to named steps
