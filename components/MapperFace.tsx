@@ -51,10 +51,7 @@ export function MapperFace({
   }, [reduce]);
 
   useEffect(() => {
-    if (reduce || mood !== "idle") {
-      setBlink(false);
-      return;
-    }
+    if (reduce || mood !== "idle") return;
     let timeout = 0;
     const loop = () => {
       timeout = window.setTimeout(() => {
@@ -69,7 +66,7 @@ export function MapperFace({
     return () => window.clearTimeout(timeout);
   }, [mood, reduce]);
 
-  const squint = mood === "done" || blink;
+  const squint = mood === "done" || (mood === "idle" && !reduce && blink);
   const scan = (mood === "thinking" || mood === "streaming") && !reduce;
 
   return (

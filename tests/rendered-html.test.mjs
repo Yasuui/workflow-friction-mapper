@@ -8,7 +8,7 @@ const previewRoot = new URL("../app/_sites-preview/", import.meta.url);
 test("pre-renders the workflow agent product shell", async () => {
   const html = await readFile(new URL("../.next/server/app/index.html", import.meta.url), "utf8");
   assert.match(html, /<title>Workflow Friction Mapper/);
-  assert.match(html, /Paste a workflow, attach a SOP or notes, or tap a starter/);
+  assert.match(html, /Turn your workflow into a plan you can build/);
   assert.match(html, /Workflow optimizer/);
   assert.match(html, /Connect on LinkedIn/);
   assert.match(html, /View the source/);
@@ -88,7 +88,7 @@ test("sets markdown and pdf filenames, and serves SEO plus a styled 404", async 
   assert.match(exporter, /BRIEF_MARKDOWN_FILENAME/);
   assert.match(exporter, /BRIEF_PDF_FILENAME/);
   assert.match(exporter, /appendChild\(link\)/);
-  assert.match(exporter, /revokeObjectURL/);
+  assert.match(exporter, /showSaveFilePicker/);
 
   await access(new URL("../app/not-found.tsx", import.meta.url));
   await access(new URL("../app/robots.ts", import.meta.url));

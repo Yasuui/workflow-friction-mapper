@@ -36,7 +36,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" style={{ colorScheme: "light", backgroundColor: "#f5f4ef", color: "#151515" }}>
+    <html lang="en" style={{ colorScheme: "dark", backgroundColor: "#10151c", color: "#f2f4ff" }}>
       <body><WorkflowPostHog />{children}</body>
     </html>
   );

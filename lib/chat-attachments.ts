@@ -6,6 +6,7 @@ export const ATTACH_HINT =
   "Attach a SOP PDF, process notes (.txt / .md), a CSV export, or a screenshot of the queue/sheet. Excel: export CSV. Word and Excel files (.docx / .xlsx) are not read.";
 const MAX_TEXT_BYTES = 400_000;
 const MAX_TEXT_CHARS = 12_000;
+const MAX_BINARY_BYTES = 2_000_000;
 
 export type ChatFileKind = "txt" | "md" | "csv" | "json" | "pdf" | "image" | "other";
 
@@ -31,6 +32,14 @@ export async function filesToChatParts(files: File[]): Promise<{ parts: FileUIPa
       continue;
     }
     if (kind === "image" || kind === "pdf") {
+      if (file.size > MAX_BINARY_BYTES) {
+        notes.push(`${file.name} is too large. Use a file smaller than 2 MB.`);
+        continue;
+      }
+      if (kind === "image" && !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) {
+        notes.push(`${file.name} must be a PNG, JPEG, GIF, or WebP image.`);
+        continue;
+      }
       parts.push({
         type: "file",
         filename: file.name,
@@ -47,7 +56,7 @@ export async function filesToChatParts(files: File[]): Promise<{ parts: FileUIPa
     parts.push({
       type: "file",
       filename: file.name,
-      mediaType: file.type || "text/plain",
+      mediaType: "text/plain",
       url: `data:text/plain;base64,${utf8ToBase64(text)}`,
     });
   }

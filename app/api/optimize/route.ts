@@ -11,6 +11,7 @@ import { buildDemoReply, collectUserMaterial, readMaterialIntent } from "@/lib/d
 import { extractPdfFromDataUrl, isPdfPart } from "@/lib/pdf-text";
 import { analyzeWorkflow } from "@/lib/workflow-analysis";
 import { extractFacts } from "@/lib/workflow-intake";
+import { readLimitedJson, requestSchema } from "@/lib/request-validation";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -26,8 +27,19 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const body = (await req.json()) as { messages?: UIMessage[]; intent?: unknown };
-  const messages = Array.isArray(body.messages) ? body.messages : [];
+  if (!req.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    return Response.json({ error: "Expected a JSON request." }, { status: 415 });
+  }
+  let raw: unknown;
+  try { raw = await readLimitedJson(req); }
+  catch (error) {
+    const tooLarge = error instanceof Error && error.message === "too_large";
+    return Response.json({ error: tooLarge ? "Request is too large." : "Invalid request." }, { status: tooLarge ? 413 : 400 });
+  }
+  const parsed = requestSchema.safeParse(raw);
+  if (!parsed.success) return Response.json({ error: "Invalid messages or unsupported attachment." }, { status: 400 });
+  const body = parsed.data;
+  const messages = body.messages as UIMessage[];
   const intent = readMaterialIntent(messages, body.intent);
 
   if (!process.env.OPENAI_API_KEY) {
@@ -81,7 +93,7 @@ async function streamLive(messages: UIMessage[], modelId: string, intent: Workfl
     model: openai(modelId),
     system: `${SYSTEM_PROMPT}${intentNote}${localNote}`,
     messages: await convertToModelMessages(prepared),
-    maxOutputTokens: 1400,
+    maxOutputTokens: 2400,
     temperature: 0.3,
   });
 

@@ -49,31 +49,9 @@ function fileNames(message: UIMessage): string[] {
 }
 
 function StreamProse({ text, caret }: { text: string; caret?: boolean }) {
-  const committedRef = useRef("");
-  const [chunks, setChunks] = useState<string[]>(() => (text ? [text] : []));
-
-  useEffect(() => {
-    if (!text) {
-      committedRef.current = "";
-      setChunks([]);
-      return;
-    }
-    if (!text.startsWith(committedRef.current)) {
-      committedRef.current = text;
-      setChunks([text]);
-      return;
-    }
-    const delta = text.slice(committedRef.current.length);
-    if (!delta) return;
-    committedRef.current = text;
-    setChunks((current) => [...current, delta]);
-  }, [text]);
-
   return (
     <p>
-      {chunks.map((chunk, index) => (
-        <span key={index} className="token-rise">{chunk}</span>
-      ))}
+      {text}
       {caret ? <span className="stream-caret" aria-hidden="true" /> : null}
     </p>
   );
@@ -90,12 +68,10 @@ export function WorkflowChat() {
   const [mobileCanvasOpen, setMobileCanvasOpen] = useState(false);
   const [intent, setIntent] = useState<WorkflowIntent | null>(null);
   const [intakeAsked, setIntakeAsked] = useState(false);
-  const intentRef = useRef<WorkflowIntent | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pinToBottom = useRef(true);
-  intentRef.current = intent;
 
   const transport = useMemo(
     () =>
@@ -108,7 +84,6 @@ export function WorkflowChat() {
             messages,
             trigger,
             messageId,
-            intent: intentRef.current ?? undefined,
           },
         }),
       }),
@@ -121,12 +96,15 @@ export function WorkflowChat() {
     onFinish: ({ message }) => {
       const report = splitAgentOutput(textOf(message)).report;
       if (!report) return;
+      setCanvasReport(report);
+      setMobileCanvasOpen(true);
       captureProductEvent("analysis_completed", {
         ...resultContextFromAgent(report),
         primary_opportunity: report.opportunities[0]?.title.slice(0, 40) || report.doThis[0]?.action.slice(0, 40) || "none",
         used_example: usedExampleRef.current,
       });
     },
+    onError: () => setError("Could not generate a plan. Check your connection and try again."),
   });
 
   const busy = status === "submitted" || status === "streaming";
@@ -153,16 +131,6 @@ export function WorkflowChat() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (status === "submitted" || status === "streaming") return;
-    const last = [...messages].reverse().find((message) => message.role === "assistant");
-    if (!last) return;
-    const report = splitAgentOutput(textOf(last)).report;
-    if (!report) return;
-    setCanvasReport(report);
-    setMobileCanvasOpen(true);
-  }, [messages, status]);
 
   useEffect(() => {
     if (!pinToBottom.current || !logRef.current) return;
@@ -199,7 +167,6 @@ export function WorkflowChat() {
     }
     const resolved = inferWorkflowIntent(trimmed, forcedIntent ?? intent);
     if (!intent) setIntent(resolved);
-    intentRef.current = resolved;
     const { parts, note } = await filesToChatParts(files);
     setError(note);
     if (fromExample) { setUsedExample(true); usedExampleRef.current = true; }
@@ -233,7 +200,6 @@ export function WorkflowChat() {
 
   function askIntake() {
     setIntent("create");
-    intentRef.current = "create";
     setIntakeAsked(true);
     setError("");
     setMessages((current) => [
@@ -259,7 +225,6 @@ export function WorkflowChat() {
     setCanvasReport(null);
     setMobileCanvasOpen(false);
     setIntent(null);
-    intentRef.current = null;
     setIntakeAsked(false);
     pinToBottom.current = true;
     composerRef.current?.focus();
@@ -310,7 +275,7 @@ export function WorkflowChat() {
             <div className="thread-inner">
               <div className="conversation-intro">
                 <span className="panel-label">Conversation</span>
-                <h1>Turn the messy process into one clear first move.</h1>
+                <h1>Turn your workflow into a plan you can build.</h1>
               </div>
               {thread.map((message, index) => {
                 const raw = textOf(message);
@@ -381,7 +346,6 @@ export function WorkflowChat() {
                           disabled={busy}
                           onClick={() => {
                             setIntent("improve");
-                            intentRef.current = "improve";
                             setError("");
                             captureProductEvent("example_selected", { example_label: starter.analyticsLabel });
                             void submitConversation(starter.prompt, [], true, "improve");
@@ -449,7 +413,7 @@ export function WorkflowChat() {
                 {error ? <p className="form-error" role="alert">{error}</p> : null}
               </form>
               <p className="mode-note">
-                <span>Mapper updates the brief as you refine the workflow.</span>
+                <span>{mode === "live" ? "Your input is sent to OpenAI. Avoid sharing sensitive data." : "Sample mode: review and complete the plan before building."}</span>
                 <span className="mode-pill"><i />{mode === "live" ? "Live model" : "Demo mode"}</span>
               </p>
             </div>
@@ -461,7 +425,10 @@ export function WorkflowChat() {
             report={canvasReport}
             usedExample={usedExample}
             open={mobileCanvasOpen}
-            onClose={() => setMobileCanvasOpen(false)}
+            onClose={() => {
+              setMobileCanvasOpen(false);
+              requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".canvas-toggle")?.focus());
+            }}
           />
         ) : null}
       </div>

@@ -55,9 +55,13 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
   const markFriction = report.intent !== "create";
 
   async function copyBrief() {
-    await navigator.clipboard.writeText(reportToMarkdown(report));
-    setCopyStatus("Copied");
-    captureProductEvent("report_copied", context);
+    try {
+      await navigator.clipboard.writeText(reportToMarkdown(report));
+      setCopyStatus("Copied");
+      captureProductEvent("report_copied", context);
+    } catch {
+      setCopyStatus("Copy unavailable — download instead");
+    }
   }
 
   function downloadMd() {
@@ -85,8 +89,8 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
     <section className="report-card" aria-label="Workflow optimization brief">
       <header className="report-card-head">
         <div>
-          <span className="panel-label">{briefKicker(report.intent)}</span>
-          <p className="report-kicker">{subtitle}</p>
+          <span className="plan-title">Automation plan</span>
+          <p className="report-kicker">{subtitle} · Proposed, not running</p>
         </div>
         <div className="results-actions" aria-label="Brief tools">
           <button type="button" onClick={copyBrief}>
@@ -106,6 +110,34 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
 
       <div className="report-scroll">
         <div className="report-inner">
+          {report.buildPlan ? (
+            <section className="build-plan" aria-label="Automation build plan">
+              <p className="plan-intro">Review the details before building. Confirm anything marked as missing.</p>
+              {[
+                ["Trigger", report.buildPlan.trigger || "Needs confirmation"],
+                ["Inputs", report.buildPlan.inputs || "Needs confirmation"],
+                ["Human review", report.buildPlan.approval || "Needs confirmation"],
+                ["Failure handling", report.buildPlan.failure || "Needs confirmation"],
+              ].slice(0, 2).map(([label, value], index) => (
+                <div className="plan-row" key={label}>
+                  <div className="plan-row-title"><span className="plan-number">{String(index + 1).padStart(2, "0")}</span><h2>{label}</h2></div><p>{value}</p>
+                </div>
+              ))}
+              <div className="plan-row">
+                <div className="plan-row-title"><span className="plan-number">03</span><h2>Steps</h2></div>
+                <ol>{report.buildPlan.steps.length ? report.buildPlan.steps.map((step, index) => <li key={`${step}-${index}`}>{step}</li>) : <li>Needs confirmation</li>}</ol>
+              </div>
+              {[["Human review", report.buildPlan.approval], ["Failure handling", report.buildPlan.failure]].map(([label, value], index) => (
+                <div className="plan-row" key={label}>
+                  <div className="plan-row-title"><span className="plan-number">{String(index + 4).padStart(2, "0")}</span><h2>{label}</h2></div><p>{value || "Needs confirmation"}</p>
+                </div>
+              ))}
+              <div className="plan-row">
+                <div className="plan-row-title"><span className="plan-number">06</span><h2>Test before launch</h2></div>
+                <ul>{report.buildPlan.tests.length ? report.buildPlan.tests.map((test, index) => <li key={`${test}-${index}`}>{test}</li>) : <li>Needs confirmation</li>}</ul>
+              </div>
+            </section>
+          ) : <p className="plan-notice">This response does not include a build plan. Ask Mapper to add a trigger, inputs, review steps and failure handling.</p>}
           <section className="brief-hero">
             <div>
               {report.hours.annualManual != null ? (
