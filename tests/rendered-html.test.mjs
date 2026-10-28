@@ -9,6 +9,7 @@ test("pre-renders the workflow agent product shell", async () => {
   const html = await readFile(new URL("../.next/server/app/index.html", import.meta.url), "utf8");
   assert.match(html, /<title>Workflow Friction Mapper/);
   assert.match(html, /Turn your workflow into a plan you can build/);
+  assert.match(html, /Or try a sample/);
   assert.match(html, /Workflow optimizer/);
   assert.match(html, /Connect on LinkedIn/);
   assert.match(html, /View the source/);
@@ -88,7 +89,11 @@ test("sets markdown and pdf filenames, and serves SEO plus a styled 404", async 
   assert.match(exporter, /BRIEF_MARKDOWN_FILENAME/);
   assert.match(exporter, /BRIEF_PDF_FILENAME/);
   assert.match(exporter, /appendChild\(link\)/);
-  assert.match(exporter, /showSaveFilePicker/);
+  // Downloads use a data: URL (Chrome ignores the download name on blob: URLs), so there is
+  // no object URL to revoke; the temporary link must still be removed.
+  assert.match(exporter, /data:application\/octet-stream;base64,/);
+  assert.match(exporter, /link\.remove\(\)/);
+  assert.doesNotMatch(exporter, /createObjectURL/);
 
   await access(new URL("../app/not-found.tsx", import.meta.url));
   await access(new URL("../app/robots.ts", import.meta.url));

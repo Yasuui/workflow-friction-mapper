@@ -29,6 +29,9 @@ import {
   resultContextFromAgent,
 } from "@/lib/product-analytics";
 
+// The intent travels per request in sendMessage's body, so the transport holds no component state.
+const CHAT_TRANSPORT = new DefaultChatTransport({ api: "/api/optimize" });
+
 const GREETING_MESSAGE: UIMessage = {
   id: "agent-greeting",
   role: "assistant",
@@ -42,6 +45,17 @@ function textOf(message: UIMessage): string {
     .join("\n");
 }
 
+/** The API answers rejected requests with { error }; the transport surfaces that body as the message. */
+function readableChatError(failure: Error): string {
+  try {
+    const parsed = JSON.parse(failure.message) as { error?: unknown };
+    if (typeof parsed.error === "string" && parsed.error) return parsed.error;
+  } catch {
+    // Not a JSON error body; fall through to the generic message.
+  }
+  return "Mapper could not finish that reply. Try again, or start a new conversation.";
+}
+
 function fileNames(message: UIMessage): string[] {
   return message.parts
     .filter((part): part is { type: "file"; filename?: string; mediaType: string; url: string } => part.type === "file")
@@ -49,9 +63,24 @@ function fileNames(message: UIMessage): string[] {
 }
 
 function StreamProse({ text, caret }: { text: string; caret?: boolean }) {
+  // Each streamed delta becomes its own span so only new tokens animate.
+  // State is adjusted during render (not in an effect) to avoid a second paint per token.
+  const [stream, setStream] = useState(() => ({ committed: text, chunks: text ? [text] : [] }));
+  if (stream.committed !== text) {
+    const continues = Boolean(text) && text.startsWith(stream.committed);
+    const delta = continues ? text.slice(stream.committed.length) : "";
+    setStream({
+      committed: text,
+      chunks: !text ? [] : continues ? [...stream.chunks, delta] : [text],
+    });
+  }
+  const { chunks } = stream;
+
   return (
     <p>
-      {text}
+      {chunks.map((chunk, index) => (
+        <span key={index} className="token-rise">{chunk}</span>
+      ))}
       {caret ? <span className="stream-caret" aria-hidden="true" /> : null}
     </p>
   );
@@ -73,26 +102,10 @@ export function WorkflowChat() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pinToBottom = useRef(true);
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/optimize",
-        prepareSendMessagesRequest: ({ messages, body, id, trigger, messageId }) => ({
-          body: {
-            ...(body ?? {}),
-            id,
-            messages,
-            trigger,
-            messageId,
-          },
-        }),
-      }),
-    [],
-  );
-
   const { messages, sendMessage, setMessages, status, stop } = useChat({
     messages: [GREETING_MESSAGE],
-    transport,
+    transport: CHAT_TRANSPORT,
+    onError: (failure) => setError(readableChatError(failure)),
     onFinish: ({ message }) => {
       const report = splitAgentOutput(textOf(message)).report;
       if (!report) return;
@@ -104,7 +117,6 @@ export function WorkflowChat() {
         used_example: usedExampleRef.current,
       });
     },
-    onError: () => setError("Could not generate a plan. Check your connection and try again."),
   });
 
   const busy = status === "submitted" || status === "streaming";
@@ -174,10 +186,7 @@ export function WorkflowChat() {
     setPendingFiles([]);
     pinToBottom.current = true;
     const payload = trimmed ? `${intentLine(resolved)}\n${trimmed}` : intentLine(resolved);
-    await sendMessage({
-      text: payload,
-      files: parts,
-    });
+    await sendMessage({ text: payload, files: parts }, { body: { intent: resolved } });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

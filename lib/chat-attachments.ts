@@ -5,8 +5,20 @@ export const MAX_FILES = 5;
 export const ATTACH_HINT =
   "Attach a SOP PDF, process notes (.txt / .md), a CSV export, or a screenshot of the queue/sheet. Excel: export CSV. Word and Excel files (.docx / .xlsx) are not read.";
 const MAX_TEXT_BYTES = 400_000;
+/** Base64 adds a third, so 2.5 MB of PDF or image stays under the API's 4 MB request limit. */
+export const MAX_BINARY_BYTES = 2_500_000;
+
+/** Image types the live model accepts. Shared with the API guard in lib/optimize-request.ts. */
+export const SUPPORTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+
+/** Text attachments are sent as UTF-8 text/plain data URLs and labelled with a normalized type. */
+export const TEXT_MEDIA_TYPES = {
+  txt: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  json: "application/json",
+} as const;
 const MAX_TEXT_CHARS = 12_000;
-const MAX_BINARY_BYTES = 2_000_000;
 
 export type ChatFileKind = "txt" | "md" | "csv" | "json" | "pdf" | "image" | "other";
 
@@ -32,19 +44,22 @@ export async function filesToChatParts(files: File[]): Promise<{ parts: FileUIPa
       continue;
     }
     if (kind === "image" || kind === "pdf") {
+      const mediaType = kind === "pdf" ? "application/pdf" : file.type.toLowerCase();
+      if (kind === "image" && !(SUPPORTED_IMAGE_TYPES as readonly string[]).includes(mediaType)) {
+        notes.push(`${file.name} is not a supported image. Use PNG, JPEG, GIF, or WebP.`);
+        continue;
+      }
       if (file.size > MAX_BINARY_BYTES) {
-        notes.push(`${file.name} is too large. Use a file smaller than 2 MB.`);
+        notes.push(`${file.name} is over 2.5 MB. Attach a smaller export or paste the relevant steps.`);
         continue;
       }
-      if (kind === "image" && !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) {
-        notes.push(`${file.name} must be a PNG, JPEG, GIF, or WebP image.`);
-        continue;
-      }
+      const dataUrl = await readDataUrl(file);
       parts.push({
         type: "file",
         filename: file.name,
-        mediaType: kind === "pdf" ? "application/pdf" : file.type || "image/png",
-        url: await readDataUrl(file),
+        mediaType,
+        // FileReader may label the payload differently (or as octet-stream); align it with mediaType.
+        url: dataUrl.replace(/^data:[^;,]*/, `data:${mediaType}`),
       });
       continue;
     }
@@ -56,7 +71,7 @@ export async function filesToChatParts(files: File[]): Promise<{ parts: FileUIPa
     parts.push({
       type: "file",
       filename: file.name,
-      mediaType: "text/plain",
+      mediaType: TEXT_MEDIA_TYPES[kind],
       url: `data:text/plain;base64,${utf8ToBase64(text)}`,
     });
   }

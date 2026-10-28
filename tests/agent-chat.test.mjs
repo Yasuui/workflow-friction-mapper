@@ -7,6 +7,7 @@ import {
   BRIEF_MARKDOWN_FILENAME,
   BRIEF_PDF_FILENAME,
   WORKFLOW_STARTERS,
+  factsAndAssumptions,
   parseReportJson,
   reportToMarkdown,
   splitAgentOutput,
@@ -258,5 +259,36 @@ test("demo deductions stay inferences in the brief and Markdown export", () => {
     assert.match(prose, /possible friction/i);
     assert.equal(report.hours.kind, "fact");
     assert.ok(report.hours.annualManual > 0);
+  }
+});
+
+test("facts and assumptions list each evidence line once, even when the model repeats it", () => {
+  for (const starter of WORKFLOW_STARTERS) {
+    const { report } = splitAgentOutput(buildDemoReply(starter.prompt, "improve"));
+    const { facts, assumptions } = factsAndAssumptions(report);
+    const all = [...facts, ...assumptions].map((line) => line.toLowerCase());
+    assert.equal(new Set(all).size, all.length, starter.label);
+  }
+
+  const { report } = splitAgentOutput(buildDemoReply(WORKFLOW_STARTERS[0].prompt, "improve"));
+  const repeated = {
+    ...report,
+    friction: [...report.friction, ...report.friction],
+    bottlenecks: [...report.bottlenecks, ...report.bottlenecks],
+    assumptions: [...report.assumptions, ...report.assumptions],
+  };
+  const { facts, assumptions } = factsAndAssumptions(repeated);
+  const all = [...facts, ...assumptions].map((line) => line.toLowerCase());
+  assert.equal(new Set(all).size, all.length);
+  assert.ok(all.length > 0);
+});
+
+test("sample build plan remains explicit about missing details and exports its safety checks", () => {
+  const report = splitAgentOutput(buildDemoReply(WORKFLOW_STARTERS[1].prompt, "improve")).report;
+  assert.ok(report?.buildPlan);
+  assert.match(report.buildPlan.trigger, /needs confirmation/i);
+  const markdown = reportToMarkdown(report);
+  for (const section of ["Automation build plan (proposed)", "Human review", "Failure handling", "Test before launch"]) {
+    assert.ok(markdown.includes(section));
   }
 });

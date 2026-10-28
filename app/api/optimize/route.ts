@@ -11,7 +11,7 @@ import { buildDemoReply, collectUserMaterial, readMaterialIntent } from "@/lib/d
 import { extractPdfFromDataUrl, isPdfPart } from "@/lib/pdf-text";
 import { analyzeWorkflow } from "@/lib/workflow-analysis";
 import { extractFacts } from "@/lib/workflow-intake";
-import { readLimitedJson, requestSchema } from "@/lib/request-validation";
+import { readOptimizeRequest } from "@/lib/optimize-request";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -27,25 +27,19 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!req.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
-    return Response.json({ error: "Expected a JSON request." }, { status: 415 });
+  const request = await readOptimizeRequest(req);
+  if (!request.ok) {
+    return Response.json({ error: request.error }, { status: request.status });
   }
-  let raw: unknown;
-  try { raw = await readLimitedJson(req); }
-  catch (error) {
-    const tooLarge = error instanceof Error && error.message === "too_large";
-    return Response.json({ error: tooLarge ? "Request is too large." : "Invalid request." }, { status: tooLarge ? 413 : 400 });
-  }
-  const parsed = requestSchema.safeParse(raw);
-  if (!parsed.success) return Response.json({ error: "Invalid messages or unsupported attachment." }, { status: 400 });
-  const body = parsed.data;
-  const messages = body.messages as UIMessage[];
-  const intent = readMaterialIntent(messages, body.intent);
+  const { messages } = request.value;
+  const intent = readMaterialIntent(messages, request.value.intent);
 
   if (!process.env.OPENAI_API_KEY) {
     return streamDemo(messages, intent);
   }
 
+  // The fallback covers errors raised while setting up the call. Provider errors after the
+  // stream has started reach the client as a generic stream error and are not retried.
   try {
     return await streamLive(messages, LIVE_MODEL, intent);
   } catch {

@@ -191,8 +191,8 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
             <section>
               <span className="panel-label">Automation options</span>
               <div className="automation-grid">
-                {report.automations.map((item) => (
-                  <article key={item.title} className="automation-item">
+                {report.automations.map((item, index) => (
+                  <article key={`${index}-${item.title}`} className="automation-item">
                     <div className="automation-head">
                       <h2>{item.title}</h2>
                       <span className="effort-pill">{item.effort}</span>
@@ -233,8 +233,8 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
 
           {report.friction.length > 0 || report.bottlenecks.length > 0 ? (
             <section className="evidence-grid">
-              {report.friction.map((item) => (
-                <article key={`friction-${item.issue}`}>
+              {report.friction.map((item, index) => (
+                <article key={`friction-${index}-${item.issue}`}>
                   <div className="evidence-head">
                     <span className="panel-label">Friction</span>
                     <KindPill kind={item.kind} />
@@ -243,8 +243,8 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
                   <p>{stripKindPrefix(item.evidence)}</p>
                 </article>
               ))}
-              {report.bottlenecks.map((item) => (
-                <article key={`bottleneck-${item.issue}`}>
+              {report.bottlenecks.map((item, index) => (
+                <article key={`bottleneck-${index}-${item.issue}`}>
                   <div className="evidence-head">
                     <span className="panel-label">Bottleneck</span>
                     <KindPill kind={item.kind} />

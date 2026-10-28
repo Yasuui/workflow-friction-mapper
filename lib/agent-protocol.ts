@@ -238,9 +238,14 @@ export function stepCaption(report: AgentReport, step: string): string {
 export function factsAndAssumptions(report: AgentReport): { facts: string[]; assumptions: string[] } {
   const facts: string[] = [];
   const assumptions: string[] = [];
+  // Friction and bottlenecks often cite the same evidence. Show each line once, and a fact
+  // never also appears as an assumption.
+  const seen = new Set<string>();
   const push = (kind: EvidenceKind, text: string) => {
     const clean = stripKindPrefix(text);
-    if (!clean) return;
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) return;
+    seen.add(key);
     (kind === "inference" ? assumptions : facts).push(clean);
   };
   if (report.hours.annualManual != null && report.hours.basis) {
@@ -251,8 +256,8 @@ export function factsAndAssumptions(report: AgentReport): { facts: string[]; ass
   }
   for (const item of report.friction) push(item.kind, item.evidence);
   for (const item of report.bottlenecks) push(item.kind, item.evidence);
-  for (const item of report.assumptions) assumptions.push(stripKindPrefix(item));
-  return { facts: [...new Set(facts)], assumptions: [...new Set(assumptions)] };
+  for (const item of report.assumptions) push("inference", item);
+  return { facts, assumptions };
 }
 
 export function formatHours(value: number): string {
