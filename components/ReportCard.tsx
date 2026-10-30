@@ -9,6 +9,7 @@ import {
   type EvidenceKind,
   factsAndAssumptions,
   formatHours,
+  quoteAppearsIn,
   reportToMarkdown,
   reportToPlainText,
   stepCaption,
@@ -52,7 +53,15 @@ function EvidenceCard({ item, type }: { item: EvidenceItem; type: "Friction" | "
   );
 }
 
-export function ReportCard({ report, usedExample }: { report: AgentReport; usedExample: boolean }) {
+// A pilot plan every recommendation carries: what to measure and when to stop. Savings are never
+// claimed; only a measured before/after can show them.
+const PILOT_STEPS = [
+  "Run the change beside the current process for two weeks, on real work.",
+  "Record handling minutes per run, exceptions, and rework, before and after.",
+  "Stop or roll back if a request is lost or routed wrongly.",
+];
+
+export function ReportCard({ report, source, usedExample }: { report: AgentReport; source: string; usedExample: boolean }) {
   const [copyStatus, setCopyStatus] = useState("Copy");
   const [feedbackValue, setFeedbackValue] = useState<"yes" | "partly" | "no" | null>(null);
   const [feedbackSent, setFeedbackSent] = useState(false);
@@ -78,7 +87,11 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
   const frictionSteps = markFriction ? workflowSteps.filter((step) => stepIsFriction(report, step)).length : 0;
   const issueCount = report.friction.length + report.bottlenecks.length;
   const evidenceTotal = facts.length + assumptions.length;
-  const factShare = evidenceTotal ? Math.round((facts.length / evidenceTotal) * 100) : 0;
+  const claims = [...report.friction, ...report.bottlenecks, ...report.opportunities];
+  const linked = claims.filter((item) => quoteAppearsIn(item.evidence, source));
+  const unlinkedCount = claims.length - linked.length + report.assumptions.length;
+  const leadQuote = linked[0] ?? null;
+  const abstained = !doThis.length && !report.friction.length && !report.automations.length;
   const keep = (item: EvidenceItem) => evidenceFilter === "all" || item.kind === evidenceFilter;
   const friction = report.friction.filter(keep);
   const bottlenecks = report.bottlenecks.filter(keep);
@@ -215,48 +228,19 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
             </section>
           ) : <p className="plan-notice">This response does not include a build plan. Ask Mapper to add a trigger, inputs, review steps and failure handling.</p>}
           <section className="brief-section" id="brief-overview" aria-label="Overview">
-            <div className="kpi-grid">
-              <div className="kpi">
-                <span className="kpi-label">Manual time</span>
-                {report.hours.annualManual != null ? (
-                  <span className="kpi-value">{formatHours(report.hours.annualManual)}<small>hrs/yr</small></span>
-                ) : (
-                  <span className="kpi-value is-muted">—</span>
-                )}
-                <span className="kpi-caption">
-                  {report.hours.annualManual != null ? "from stated volume only" : "Hours not stated"}
-                </span>
-              </div>
-              <div className="kpi">
-                <span className="kpi-label">{report.intent === "create" ? "Proposed steps" : "Steps mapped"}</span>
-                <span className="kpi-value">{workflowSteps.length}</span>
-                <span className="kpi-caption">
-                  {markFriction ? `${frictionSteps} with friction` : "ready to pilot"}
-                </span>
-              </div>
-              <div className="kpi">
-                <span className="kpi-label">Issues found</span>
-                <span className={`kpi-value ${issueCount ? "is-friction" : "is-muted"}`}>{issueCount}</span>
-                <span className="kpi-caption">
-                  {report.friction.length} friction · {report.bottlenecks.length} bottleneck{report.bottlenecks.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="kpi">
-                <span className="kpi-label">Grounded in facts</span>
-                <span className={`kpi-value ${evidenceTotal ? "" : "is-muted"}`}>
-                  {evidenceTotal ? <>{factShare}<small>%</small></> : "—"}
-                </span>
-                <div className="kpi-meter" role="img" aria-label={`${facts.length} facts, ${assumptions.length} assumptions`}>
-                  <span style={{ width: `${factShare}%` }} />
-                </div>
-              </div>
+            <div className={`first-move ${abstained ? "is-abstained" : ""}`}>
+              <span className="panel-label">{abstained ? "No supported improvement yet" : "Recommended move"}</span>
+              <p>{stripKindPrefix(report.firstMove) || "Name the step that still needs a person every time."}</p>
+              {leadQuote ? (
+                <figure className="lead-quote">
+                  <blockquote>{stripKindPrefix(leadQuote.evidence).replace(/^[“"]|[”"]$/g, "")}</blockquote>
+                  <figcaption>From your description{"step" in leadQuote && leadQuote.step ? ` · ${stripKindPrefix(leadQuote.step)}` : ""}</figcaption>
+                </figure>
+              ) : null}
             </div>
 
-            {report.firstMove ? (
-              <div className="first-move">
-                <span className="panel-label">First move</span>
-                <p>{stripKindPrefix(report.firstMove)}</p>
-              </div>
+            {report.question ? (
+              <p className="report-question"><strong>Open question</strong>{report.question}</p>
             ) : null}
 
             {meaning ? (
@@ -266,8 +250,33 @@ export function ReportCard({ report, usedExample }: { report: AgentReport; usedE
               </div>
             ) : null}
 
-            {report.question ? (
-              <p className="report-question"><strong>Open question</strong>{report.question}</p>
+            <dl className="proof-strip">
+              <div>
+                <dt>Manual workload</dt>
+                <dd>
+                  {report.hours.annualManual != null ? <>{formatHours(report.hours.annualManual)}<small> hrs/yr</small></> : <span className="is-muted">Not stated</span>}
+                </dd>
+                <span>{report.hours.annualManual != null ? "From your stated volume. Workload, not savings." : "Add minutes per run and runs per week."}</span>
+              </div>
+              <div>
+                <dt>{report.intent === "create" ? "Proposed steps" : "Steps mapped"}</dt>
+                <dd>{workflowSteps.length}</dd>
+                <span>{markFriction ? `${frictionSteps} with possible friction` : "ready to pilot"}</span>
+              </div>
+              <div>
+                <dt>Traceable to your words</dt>
+                <dd>{linked.length}<small> of {claims.length}</small></dd>
+                <span>{unlinkedCount} assumption{unlinkedCount === 1 ? "" : "s"} labelled as such</span>
+              </div>
+            </dl>
+
+            {!abstained && report.intent !== "create" ? (
+              <div className="pilot-panel">
+                <span className="panel-label">How to test it</span>
+                <ol>
+                  {PILOT_STEPS.map((step) => <li key={step}>{step}</li>)}
+                </ol>
+              </div>
             ) : null}
           </section>
 

@@ -27,7 +27,7 @@ Use a trailing 30-day window unless a claim states otherwise.
 - **Strong engagement rate:** unique activated visitors with `report_copied` or `report_downloaded` divided by activated visitors.
 - **Feedback response rate:** unique activated visitors with `feedback_submitted` divided by activated visitors.
 - **Positive usefulness rate:** `yes` responses divided by all structured feedback responses.
-- **Top friction signal:** most common `primary_opportunity` among completed analyses.
+- **Top friction signal:** share of completed analyses where `primary_opportunity` is `named` (an enum, never report wording).
 - **Input quality mix:** distribution of `input_confidence`.
 - **Acquisition mix:** distribution of `acquisition_source`.
 

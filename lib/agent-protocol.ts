@@ -264,7 +264,7 @@ export function formatHours(value: number): string {
   return Number.isInteger(value) ? String(value) : String(value);
 }
 
-export function splitAgentOutput(raw: string): {
+export function splitAgentOutput(raw: string, source?: string): {
   prose: string;
   report: AgentReport | null;
   streamingFence: boolean;
@@ -276,7 +276,8 @@ export function splitAgentOutput(raw: string): {
   const prose = raw.slice(0, fenceOpen).trim();
   const closed = FENCE.exec(raw);
   if (!closed) return { prose, report: null, streamingFence: true };
-  return { prose, report: parseReportJson(closed[1]), streamingFence: false };
+  const report = parseReportJson(closed[1]);
+  return { prose, report: report && source != null ? groundReport(report, source) : report, streamingFence: false };
 }
 
 export function parseReportJson(source: string): AgentReport | null {
@@ -305,9 +306,9 @@ export function parseReportJson(source: string): AgentReport | null {
       question: typeof data.question === "string" && data.question.trim() ? data.question.trim() : null,
       buildPlan: parseBuildPlan(data.buildPlan),
       hours: {
-        annualManual: typeof hours.annualManual === "number" ? hours.annualManual : null,
-        basis: typeof hours.basis === "string" ? hours.basis : null,
-        kind: hours.kind === "inference" ? "inference" : "fact",
+        annualManual: validHours(hours.annualManual),
+        basis: validHours(hours.annualManual) != null && typeof hours.basis === "string" ? hours.basis : null,
+        kind: hours.kind === "fact" ? "fact" : "inference",
       },
     };
   } catch {
@@ -414,11 +415,96 @@ function asEvidence(value: unknown): EvidenceItem[] {
       return {
         step: String(row.step ?? "").trim() || "Workflow",
         issue: stripKindPrefix(String(row.issue ?? "")),
-        evidence: stripKindPrefix(String(row.evidence ?? "")) || "From the provided workflow.",
-        kind: (row.kind === "inference" ? "inference" : "fact") as EvidenceKind,
+        ...evidenceOf(row),
       };
     })
     .filter((item) => item.issue);
+}
+
+const UNQUOTED_EVIDENCE = "Not quoted from the material.";
+
+// A claim is a fact only when it is explicitly labelled one and carries a quote. Anything
+// unlabelled, mislabelled or unquoted is shown as an inference, never promoted to fact.
+function evidenceOf(row: { evidence?: unknown; kind?: unknown }): { evidence: string; kind: EvidenceKind } {
+  const evidence = stripKindPrefix(String(row.evidence ?? ""));
+  if (!evidence) return { evidence: UNQUOTED_EVIDENCE, kind: "inference" };
+  return { evidence, kind: row.kind === "fact" ? "fact" : "inference" };
+}
+
+// Upper bound is a full-time year for a 25-person team; anything beyond is not a credible workload.
+const MAX_ANNUAL_HOURS = 52_000;
+
+function validHours(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_ANNUAL_HOURS) return null;
+  return Math.round(value * 10) / 10;
+}
+
+// Built with RegExp so Unicode property escapes work under the ES2017 compile target.
+const NON_WORD = new RegExp("[^\\p{L}\\p{N}%$']+", "gu");
+// Scripts written without spaces between words: word boundaries cannot be required there.
+const UNSPACED_SCRIPT = new RegExp("[\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}\\p{Script=Thai}]", "u");
+
+function normalizeForMatch(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[’‘`]/g, "'")
+    .replace(NON_WORD, " ")
+    .trim();
+}
+
+/**
+ * True only when the quote is a real span of what the person supplied. Case, punctuation and
+ * whitespace may differ, and an ellipsis may mark omitted text, but every remaining segment must
+ * appear verbatim, in order, and on word boundaries in scripts that separate words with spaces.
+ * Shared words in a different order do not count.
+ */
+export function quoteAppearsIn(quote: string, source: string): boolean {
+  const haystack = ` ${normalizeForMatch(source)} `;
+  const segments = quote
+    .split(/…|\.{3}/)
+    .map((segment) => normalizeForMatch(segment))
+    .filter(Boolean);
+  if (!segments.length || haystack.trim() === "") return false;
+  const joined = segments.join(" ");
+  const unspaced = UNSPACED_SCRIPT.test(joined);
+  if (joined.length < (unspaced ? 4 : 8)) return false;
+  let from = 0;
+  for (const segment of segments) {
+    const needle = UNSPACED_SCRIPT.test(segment) ? segment : ` ${segment} `;
+    const at = haystack.indexOf(needle, from);
+    if (at === -1) return false;
+    from = at + needle.length - (needle.endsWith(" ") ? 1 : 0);
+  }
+  return true;
+}
+
+/**
+ * History as sent to the API. Data parts (such as the data-source provenance the server returns)
+ * stay in browser state for grounding but are never resent: they would repeat the full
+ * attachment text on every turn and push valid conversations past the request-size limit.
+ */
+export function outboundMessages<M extends { parts: ReadonlyArray<{ type: string }> }>(messages: M[]): M[] {
+  return messages.map((message) =>
+    message.parts.some((part) => part.type.startsWith("data-"))
+      ? { ...message, parts: message.parts.filter((part) => !part.type.startsWith("data-")) }
+      : message,
+  );
+}
+
+/**
+ * Checks every "fact" against the person's own material. A fact whose quote cannot be found
+ * there is downgraded to an inference, so a model (or a rule) cannot make a claim look sourced.
+ */
+export function groundReport(report: AgentReport, source: string): AgentReport {
+  const ground = <T extends { evidence: string; kind: EvidenceKind }>(item: T): T =>
+    item.kind === "fact" && !quoteAppearsIn(item.evidence, source) ? { ...item, kind: "inference" } : item;
+  return {
+    ...report,
+    friction: report.friction.map(ground),
+    bottlenecks: report.bottlenecks.map(ground),
+    opportunities: report.opportunities.map(ground),
+  };
 }
 
 function asOpportunities(value: unknown): OpportunityItem[] {
@@ -429,8 +515,7 @@ function asOpportunities(value: unknown): OpportunityItem[] {
       return {
         title: stripKindPrefix(String(row.title ?? "")),
         rationale: stripKindPrefix(String(row.rationale ?? "")),
-        evidence: stripKindPrefix(String(row.evidence ?? "")) || "From the provided workflow.",
-        kind: (row.kind === "inference" ? "inference" : "fact") as EvidenceKind,
+        ...evidenceOf(row),
       };
     })
     .filter((item) => item.title && item.rationale);

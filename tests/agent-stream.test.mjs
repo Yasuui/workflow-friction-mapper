@@ -142,3 +142,15 @@ test("a failure after text has started ends the turn with an error instead of mi
   assert.ok(chunks.some((chunk) => chunk.type === "error"));
   assert.ok(!chunks.some((chunk) => chunk.type === "text-delta" && /Demo brief|never used/.test(chunk.delta)));
 });
+
+test("attachment text the server read is returned as a data-source part for grounding", async () => {
+  const message = await finalMessage(
+    streamAgentReply({ attempts: [], system: "s", messages: [user], demoReply, delayMs: 0, sourceMaterial: "Attachment sop.pdf:\nApprove refunds daily." }),
+  );
+  assert.equal(textOf(message), "Demo brief.");
+  const source = message.parts.find((part) => part.type === "data-source");
+  assert.equal(source?.data.text, "Attachment sop.pdf:\nApprove refunds daily.");
+
+  const plain = await finalMessage(streamAgentReply({ attempts: [], system: "s", messages: [user], demoReply, delayMs: 0 }));
+  assert.equal(plain.parts.some((part) => part.type === "data-source"), false);
+});

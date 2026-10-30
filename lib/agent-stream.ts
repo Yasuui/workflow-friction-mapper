@@ -26,31 +26,50 @@ export type AgentStreamOptions = {
   demoReply: () => Promise<string>;
   onModelError?: (label: string, error: unknown) => void;
   delayMs?: number;
+  /** Aborts live attempts: the client disconnecting or the route's timeout. */
+  abortSignal?: AbortSignal;
+  /**
+   * The attachment text the server read (decoded files, extracted PDFs). Sent back as a
+   * `data-source` part so the browser can check quotes from attachments it cannot parse itself.
+   */
+  sourceMaterial?: string;
+  /** Runs once the stream has fully ended, however it ended. */
+  onDone?: () => void;
 };
 
 // The fenced JSON brief alone runs 800–1,500 tokens, and reasoning tokens count against this cap.
 export const LIVE_MAX_OUTPUT_TOKENS = 6000;
+const DEMO_CHUNK_CHARS = 2048;
 export const LIVE_FALLBACK_NOTICE = "The live model is unavailable right now, so this is the rule-based demo brief.";
 
 export function streamAgentReply(options: AgentStreamOptions): Response {
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
-      let started = false;
-      for (const attempt of options.attempts) {
-        const outcome = await pipeLiveAttempt(attempt, options, writer, started);
-        started = started || outcome.started;
-        if (outcome.status === "done") return;
-        if (outcome.status === "failed-midstream") {
-          writer.write({ type: "error", errorText: "The reply was interrupted. Try again." });
-          return;
-        }
+      try {
+        await runAttempts(options, writer);
+      } finally {
+        options.onDone?.();
       }
-      const demo = await options.demoReply();
-      const notice = options.attempts.length > 0 ? `${LIVE_FALLBACK_NOTICE} ` : "";
-      await writeText(writer, `${notice}${demo}`, { started, delayMs: options.delayMs ?? 11 });
     },
   });
   return createUIMessageStreamResponse({ stream });
+}
+
+async function runAttempts(options: AgentStreamOptions, writer: UIMessageStreamWriter) {
+    let started = false;
+    for (const attempt of options.attempts) {
+      const outcome = await pipeLiveAttempt(attempt, options, writer, started);
+      started = started || outcome.started;
+      if (outcome.status === "done") return;
+      if (options.abortSignal?.aborted && outcome.status === "failed-early") break;
+      if (outcome.status === "failed-midstream") {
+        writer.write({ type: "error", errorText: "The reply was interrupted. Try again." });
+        return;
+      }
+    }
+    const demo = await options.demoReply();
+    const notice = options.attempts.length > 0 ? `${LIVE_FALLBACK_NOTICE} ` : "";
+    await writeText(writer, `${notice}${demo}`, { started, delayMs: options.delayMs ?? 0, source: options.sourceMaterial });
 }
 
 async function pipeLiveAttempt(
@@ -69,6 +88,7 @@ async function pipeLiveAttempt(
       maxOutputTokens: LIVE_MAX_OUTPUT_TOKENS,
       // One retry per model keeps the worst case (both models down) to a few seconds before the demo.
       maxRetries: 1,
+      abortSignal: options.abortSignal,
       providerOptions: { openai: { reasoningEffort: "low" } },
       onError: () => {
         // Reported through the error chunk below; avoids a duplicate unhandled log.
@@ -80,6 +100,7 @@ async function pipeLiveAttempt(
     for await (const chunk of result.toUIMessageStream({ onError: describeError })) {
       if (chunk.type === "error") throw new Error(chunk.errorText);
       if (chunk.type === "start" && started) continue;
+      if (chunk.type === "finish") writeSource(writer, options.sourceMaterial);
       if (!wroteText) {
         pending.push(chunk);
         if (chunk.type !== "text-delta" || !chunk.delta) continue;
@@ -103,17 +124,25 @@ async function pipeLiveAttempt(
 async function writeText(
   writer: UIMessageStreamWriter,
   text: string,
-  { started, delayMs }: { started: boolean; delayMs: number },
+  { started, delayMs, source }: { started: boolean; delayMs: number; source?: string },
 ) {
   const id = "demo-text";
   if (!started) writer.write({ type: "start" });
   writer.write({ type: "text-start", id });
-  for (let index = 0; index < text.length; index += 5) {
-    writer.write({ type: "text-delta", id, delta: text.slice(index, index + 5) });
+  // The rule-based brief is already computed, so it ships at once in a few large deltas. A
+  // positive delayMs is only for tests that want to observe ordering.
+  const size = delayMs > 0 ? 5 : DEMO_CHUNK_CHARS;
+  for (let index = 0; index < text.length; index += size) {
+    writer.write({ type: "text-delta", id, delta: text.slice(index, index + size) });
     if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
   writer.write({ type: "text-end", id });
+  writeSource(writer, source);
   writer.write({ type: "finish" });
+}
+
+function writeSource(writer: UIMessageStreamWriter, source: string | undefined) {
+  if (source) writer.write({ type: "data-source", data: { text: source } });
 }
 
 function describeError(error: unknown): string {

@@ -7,6 +7,7 @@ import { analyzeWorkflow } from "@/lib/workflow-analysis";
 import { extractFacts } from "@/lib/workflow-intake";
 import { readOptimizeRequest } from "@/lib/optimize-request";
 import { streamAgentReply } from "@/lib/agent-stream";
+import { LIVE_LIMIT_NOTICE, LIVE_TIMEOUT_MS, admitLive, boundedHistory, clientKey } from "@/lib/live-guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,11 +29,21 @@ export async function POST(req: Request) {
   }
   const { messages } = request.value;
   const intent = readMaterialIntent(messages, request.value.intent);
-  const material = await collectUserMaterial(messages, extractPdfFromDataUrl);
+  // Each PDF is parsed once per request, then shared by the rules and the model prompt.
+  const extractPdf = memoize(extractPdfFromDataUrl);
+  const material = await collectUserMaterial(messages, extractPdf);
   const demoReply = async () => buildDemoReply(material, intent);
+  const hasFiles = messages.some((message) => message.role === "user" && message.parts.some((part) => part.type === "file"));
+  const sourceMaterial = hasFiles ? material : undefined;
 
   if (!process.env.OPENAI_API_KEY) {
-    return streamAgentReply({ attempts: [], system: "", messages, demoReply });
+    return streamAgentReply({ attempts: [], system: "", messages, demoReply, sourceMaterial });
+  }
+
+  const admission = admitLive(clientKey(req));
+  if (!admission.ok) {
+    const notice = LIVE_LIMIT_NOTICE[admission.reason];
+    return streamAgentReply({ attempts: [], system: "", messages, demoReply: async () => `${notice} ${await demoReply()}`, sourceMaterial });
   }
 
   const facts = extractFacts(material);
@@ -54,19 +65,38 @@ export async function POST(req: Request) {
       { model: openai(FALLBACK_MODEL), label: FALLBACK_MODEL },
     ],
     system: `${SYSTEM_PROMPT}${intentNote}${localNote}`,
-    messages: await prepareMessages(messages),
+    // Recent turns, plus a bounded copy of the original material whenever older turns are trimmed.
+    messages: await prepareMessages(boundedHistory(messages, material), extractPdf),
     demoReply,
+    sourceMaterial,
+    abortSignal: AbortSignal.any([req.signal, AbortSignal.timeout(LIVE_TIMEOUT_MS)]),
+    onDone: admission.release,
     onModelError: (label, error) => console.error(`[optimize] ${label} failed`, error),
   });
 }
 
-async function prepareMessages(messages: UIMessage[]): Promise<UIMessage[]> {
+function memoize(extract: (dataUrl: string) => Promise<string>) {
+  const cache = new Map<string, Promise<string>>();
+  return (dataUrl: string) => {
+    let pending = cache.get(dataUrl);
+    if (!pending) {
+      pending = extract(dataUrl);
+      cache.set(dataUrl, pending);
+    }
+    return pending;
+  };
+}
+
+async function prepareMessages(
+  messages: UIMessage[],
+  extractPdf: (dataUrl: string) => Promise<string>,
+): Promise<UIMessage[]> {
   const next: UIMessage[] = [];
   for (const message of messages) {
     const parts: UIMessage["parts"] = [];
     for (const part of message.parts) {
       if (part.type === "file" && isPdfPart(part.filename, part.mediaType)) {
-        const text = await extractPdfFromDataUrl(part.url);
+        const text = await extractPdf(part.url);
         parts.push({
           type: "text" as const,
           text: text
