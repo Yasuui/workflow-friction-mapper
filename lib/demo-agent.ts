@@ -77,15 +77,21 @@ export function buildDemoReply(material: string, intentHint?: WorkflowIntent | n
   }
 
   const intent = intentHint ?? token ?? inferWorkflowIntent(text);
-  const steps = extractSteps(text);
+  // Rules only see what the person says they actually do. "We do not use spreadsheets" or
+  // "the system validates fields automatically" must not trigger a spreadsheet fix.
+  const affirmed = affirmedText(text);
+  if (intent !== "create" && !hasSupportedSignal(affirmed)) {
+    return noSupportedImprovement(text, affirmed, intent);
+  }
+  const steps = extractSteps(affirmed || text);
   const usableSteps = steps.length ? steps : [text.split(/[.?\n]/)[0]?.trim() || "The current process you described"];
   const facts = extractFacts(text);
-  const friction = detectFriction(text, usableSteps, intent);
-  const bottlenecks = detectBottlenecks(text, usableSteps, friction);
-  const opportunities = detectOpportunities(text, usableSteps);
-  const automations = detectAutomations(text);
-  const doThis = detectDoThis(text, intent, automations);
-  const proposedSteps = buildProposedSteps(text, usableSteps, intent);
+  const friction = detectFriction(affirmed, usableSteps, intent);
+  const bottlenecks = detectBottlenecks(affirmed, usableSteps, friction);
+  const opportunities = detectOpportunities(affirmed, usableSteps);
+  const automations = detectAutomations(affirmed);
+  const doThis = detectDoThis(affirmed, intent, automations);
+  const proposedSteps = buildProposedSteps(affirmed, usableSteps, intent);
   const missing: string[] = [];
   if (facts.minutesPerRun == null || facts.runsPerWeek == null) missing.push("volume");
   if (facts.sensitivity == null) missing.push("data-class");
@@ -107,7 +113,7 @@ export function buildDemoReply(material: string, intentHint?: WorkflowIntent | n
         ? `Start with ${opportunities[0].title.toLowerCase()}. Run it beside the current process and measure exceptions before expanding.`
         : `Write the ${usableSteps[0].toLowerCase()} step as a checklist with a named owner, then measure one week of exceptions.`;
 
-  const meaning = buildMeaning(text, intent, friction, firstMove, proposedSteps);
+  const meaning = buildMeaning(affirmed, intent, friction, firstMove, proposedSteps);
   const summary = annual
     ? `This process has ${usableSteps.length} visible steps and ${friction.length} possible friction points inferred from your description. From the volume you stated, that is about ${annual} manual hours per year. First move: ${firstMove}`
     : `This process has ${usableSteps.length} visible steps and ${friction.length} possible friction points inferred from your description. I did not estimate hours because volume was not stated. First move: ${firstMove}`;
@@ -455,19 +461,19 @@ function detectFriction(text: string, steps: string[], intent: WorkflowIntent): 
   const stepFor = (re: RegExp, fallback: string) => steps.find((step) => re.test(step)) ?? fallback;
 
   if (/excel|spreadsheet|csv|copy|paste|row/i.test(lower)) {
-    push(stepFor(/excel|export|row|field|spreadsheet/i, steps[0] ?? "Intake"), "Data cleanup may delay the next step", "You mentioned spreadsheet, export, copy/paste, or row checks.");
+    push(stepFor(/excel|export|row|field|spreadsheet/i, steps[0] ?? "Intake"), "Data cleanup may delay the next step", sentenceFor(text, /excel|spreadsheet|csv|copy|paste|row/i, "You mentioned spreadsheet, export, copy/paste, or row checks."));
   }
   if (/send|handoff|escalate|assign|notify/i.test(lower)) {
-    push(stepFor(/send|escalat|assign|notify|hand/i, steps[1] ?? steps[0] ?? "Handoff"), "A person-to-person handoff may delay work", "You named send, assign, notify, or escalate steps.");
+    push(stepFor(/send|escalat|assign|notify|hand/i, steps[1] ?? steps[0] ?? "Handoff"), "A person-to-person handoff may delay work", sentenceFor(text, /send|handoff|escalate|assign|notify/i, "You named send, assign, notify, or escalate steps."));
   }
   if (/remind|follow[- ]up|due date/i.test(lower)) {
-    push(stepFor(/remind|follow|due/i, "Reminders"), "Reminders may depend on someone remembering to nudge", "You described reminders, follow-up, or due dates.");
+    push(stepFor(/remind|follow|due/i, "Reminders"), "Reminders may depend on someone remembering to nudge", sentenceFor(text, /remind|follow[- ]up|due date/i, "You described reminders, follow-up, or due dates."));
   }
   if (/review|approv|check required|incomplete/i.test(lower)) {
-    push(stepFor(/review|approv|check|incomplete/i, "Review"), "A human review gate may sit on the critical path", "You described review, approval, or incomplete-item checks.");
+    push(stepFor(/review|approv|check|incomplete/i, "Review"), "A human review gate may sit on the critical path", sentenceFor(text, /review|approv|check required|incomplete/i, "You described review, approval, or incomplete-item checks."));
   }
   if (/each day|daily|monitor|status/i.test(lower)) {
-    push(stepFor(/monitor|status|day|daily/i, "Monitoring"), "Status checks may be polling rather than exception-based", "You described daily checks, monitoring, or status lookups.");
+    push(stepFor(/monitor|status|day|daily/i, "Monitoring"), "Status checks may be polling rather than exception-based", sentenceFor(text, /each day|daily|monitor|status/i, "You described daily checks, monitoring, or status lookups."));
   }
   if (items.length === 0 && steps.length && intent !== "create") {
     push(steps[0], "State tracking may need a shared record", "Ordered steps were provided; a system of record for state was not specified.", "inference");
@@ -551,6 +557,66 @@ function detectOpportunities(text: string, steps: string[]): OpportunityItem[] {
     });
   }
   return items.slice(0, 3);
+}
+
+const NEGATED = /\b(?:not|no|never|nothing|none|without|don't|doesn't|didn't|isn't|aren't|won't|no longer|stopped|avoid)\b/i;
+const ALREADY_AUTOMATED = /\b(?:automatic(?:ally)?|auto-?\w+|is automated|are automated|the system (?:validates|checks|sends|flags|routes|removes)|handled by the system)\b/i;
+
+/** Clauses the person affirms they do by hand. Negated and already-automated clauses are dropped. */
+export function affirmedText(text: string): string {
+  return text
+    .split(/(?<=[.!?])\s+|\n+|;\s*|,?\s+but\s+/i)
+    .map((clause) => clause.trim())
+    .filter((clause) => clause && !NEGATED.test(clause) && !ALREADY_AUTOMATED.test(clause))
+    .join("\n");
+}
+
+const SUPPORTED_SIGNAL =
+  /excel|spreadsheet|csv|copy|paste|row|field|duplicate|send|handoff|escalate|assign|notify|remind|follow[- ]up|due date|review|approv|incomplete|each day|daily|monitor|status|meeting|notes|action items|case|ticket|queue|onboarding|new employee|course|access/i;
+
+export function hasSupportedSignal(affirmed: string): boolean {
+  return SUPPORTED_SIGNAL.test(affirmed);
+}
+
+/**
+ * Abstains instead of forcing a recommendation when nothing the person affirms matches a rule.
+ * Inventing a fix for a process that is already automated is worse than asking one question.
+ */
+function noSupportedImprovement(text: string, affirmed: string, intent: WorkflowIntent): string {
+  const steps = extractSteps(affirmed);
+  const negatedOnly = affirmed.trim().length < text.trim().length / 2;
+  const question = negatedOnly
+    ? "Most of what you described is already automated or not done. Which step still takes someone's time by hand?"
+    : "Which step takes the most time by hand, and what tool or message is involved?";
+  const report: AgentReport = {
+    intent,
+    summary: "No supported improvement yet. Nothing you described matches a manual pattern this rule set can stand behind.",
+    meaning:
+      "This is not a failure. It means there is no evidence-backed change to recommend from what was shared. Name the manual step that still costs time and Mapper will map it.",
+    steps,
+    proposedSteps: [],
+    friction: [],
+    bottlenecks: [],
+    opportunities: [],
+    doThis: [],
+    automations: [],
+    firstMove: "Name the one step that still needs a person every time, and roughly how long it takes.",
+    assumptions: ["Clauses describing work that is automated or not done were set aside, not analysed."],
+    missing: ["manual-step"],
+    question,
+    hours: { annualManual: null, basis: null, kind: "inference" },
+  };
+  return `I could not find a manual step worth changing in that description, so I will not invent one.\n\n${question}\n\n\`\`\`workflow-report\n${JSON.stringify(report, null, 2)}\n\`\`\``;
+}
+
+/** The person's own sentence that contains the match, quoted, so a claim is traceable to its source. */
+function sentenceFor(text: string, re: RegExp, fallback: string): string {
+  const sentence = affirmedText(text)
+    .split("\n")
+    .find((clause) => re.test(clause));
+  if (!sentence) return fallback;
+  const trimmed = sentence.replace(/\s+/g, " ").trim();
+  return `“${trimmed.length > 160 ? `${trimmed.slice(0, 157)}…` : trimmed}”`;
 }
 
 function quote(text: string, re: RegExp, fallback: string): string {

@@ -48,6 +48,21 @@ function textOf(message: UIMessage): string {
 }
 
 /** The API answers rejected requests with { error }; the transport surfaces that body as the message. */
+// Everything the person typed, used to check that a "fact" in a brief quotes their own material.
+function userSourceOf(messages: UIMessage[]): string {
+  return messages
+    .filter((message) => message.role === "user")
+    .map(textOf)
+    .join("\n");
+}
+
+const MODE_LABEL = { live: "Live model", demo: "Rule-based · no AI", unknown: "Engine unknown" } as const;
+const MODE_HINT = {
+  live: "Replies come from the live model, then are checked against what you shared",
+  demo: "Replies are deterministic rules grounded in what you share. No AI call, and images cannot be read",
+  unknown: "Could not confirm which engine is answering",
+} as const;
+
 function readableChatError(failure: Error): string {
   try {
     const parsed = JSON.parse(failure.message) as { error?: unknown };
@@ -123,7 +138,7 @@ export function WorkflowChat() {
   const [error, setError] = useState("");
   const [usedExample, setUsedExample] = useState(false);
   const usedExampleRef = useRef(false);
-  const [mode, setMode] = useState<"demo" | "live">("demo");
+  const [mode, setMode] = useState<"demo" | "live" | "unknown">("unknown");
   // The canvas shows one brief at a time; older briefs in the thread can be reopened by message id.
   const [canvas, setCanvas] = useState<{ id: string; report: AgentReport } | null>(null);
   const [mobileCanvasOpen, setMobileCanvasOpen] = useState(false);
@@ -139,20 +154,22 @@ export function WorkflowChat() {
     messages: [GREETING_MESSAGE],
     transport: CHAT_TRANSPORT,
     onError: (failure) => setError(readableChatError(failure)),
-    onFinish: ({ message }) => {
-      const report = splitAgentOutput(textOf(message)).report;
+    onFinish: ({ message, messages: all, isError, isAbort }) => {
+      if (isError || isAbort) return;
+      const report = splitAgentOutput(textOf(message), userSourceOf(all)).report;
       if (!report) return;
       setCanvas({ id: message.id, report });
       setMobileCanvasOpen(true);
       captureProductEvent("analysis_completed", {
         ...resultContextFromAgent(report),
-        primary_opportunity: report.opportunities[0]?.title.slice(0, 40) || report.doThis[0]?.action.slice(0, 40) || "none",
+        primary_opportunity: report.opportunities.length || report.doThis.length ? "named" : "none",
         used_example: usedExampleRef.current,
       });
     },
   });
 
   const busy = status === "submitted" || status === "streaming";
+  const userSource = useMemo(() => userSourceOf(messages), [messages]);
   const hasUser = messages.some((message) => message.role === "user");
   const showIntentPicker = !hasUser && !intakeAsked;
   const canvasOverlayOpen = Boolean(canvasReport && mobileCanvasOpen);
@@ -173,7 +190,7 @@ export function WorkflowChat() {
         if (!cancelled) setMode(data.mode === "live" ? "live" : "demo");
       })
       .catch(() => {
-        if (!cancelled) setMode("demo");
+        if (!cancelled) setMode("unknown");
       });
     return () => {
       cancelled = true;
@@ -348,9 +365,9 @@ export function WorkflowChat() {
           <span className="sr-only">{PRODUCT_LINE}</span>
         </Link>
         <div className="chrome-actions">
-          <span className={`mode-badge is-${mode}`} title={mode === "live" ? "Replies come from the live model" : "Replies are a deterministic demo grounded in what you share"}>
+          <span className={`mode-badge is-${mode}`} title={MODE_HINT[mode]}>
             <i aria-hidden="true" />
-            {mode === "live" ? "Live model" : "Demo mode"}
+            {MODE_LABEL[mode]}
           </span>
           {canvasReport ? (
             <button type="button" className="ghost-button is-outlined canvas-toggle" onClick={() => setMobileCanvasOpen(true)}>
@@ -424,7 +441,7 @@ export function WorkflowChat() {
               ) : null}
               {thread.map((message, index) => {
                 const raw = textOf(message);
-                const parsed = message.role === "assistant" ? splitAgentOutput(raw) : { prose: raw, report: null, streamingFence: false };
+                const parsed = message.role === "assistant" ? splitAgentOutput(raw, userSource) : { prose: raw, report: null, streamingFence: false };
                 const isLast = index === thread.length - 1;
                 const streamingThis = isLast && message.role === "assistant" && status === "streaming";
                 const files = fileNames(message);
@@ -559,6 +576,7 @@ export function WorkflowChat() {
           <BriefCanvas
             key={canvas.id}
             report={canvas.report}
+            source={userSource}
             usedExample={usedExample}
             open={mobileCanvasOpen}
             modal={canvasModal}

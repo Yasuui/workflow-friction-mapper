@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import WorkflowPostHog from "@/components/WorkflowPostHog";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -45,7 +44,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body><WorkflowPostHog />{children}</body>
+      <body>{children}</body>
     </html>
   );
 }

@@ -6,12 +6,15 @@ import { ReportCard } from "@/components/ReportCard";
 
 export function BriefCanvas({
   report,
+  source,
   usedExample,
   open,
   modal,
   onClose,
 }: {
   report: AgentReport;
+  /** What the person typed, so the brief can show which claims quote it. */
+  source: string;
   usedExample: boolean;
   open: boolean;
   /** True while the brief is a full-screen overlay on small screens. */
@@ -40,7 +43,7 @@ export function BriefCanvas({
         </svg>
         Close
       </button>
-      <ReportCard report={report} usedExample={usedExample} />
+      <ReportCard report={report} source={source} usedExample={usedExample} />
     </aside>
   );
 }

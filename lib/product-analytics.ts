@@ -30,7 +30,7 @@ type SafeProperties = {
     input_confidence: "low" | "medium" | "high";
     friction_band: ScoreBand;
     automation_fit_band: ScoreBand;
-    primary_opportunity: string;
+    primary_opportunity: PrimaryOpportunity;
     used_example: boolean;
   };
   "report_copied": ResultContext;
@@ -42,6 +42,8 @@ type SafeProperties = {
   };
   "contact_clicked": { destination: "linkedin" | "github" | "calcom" };
 };
+
+export type PrimaryOpportunity = "named" | "none";
 
 type ResultContext = {
   input_confidence: "low" | "medium" | "high";
@@ -64,6 +66,27 @@ const SAFE_PROPERTY_KEYS = new Set([
   "traffic_class",
   "analytics_schema_version",
 ]);
+
+// Every property is an enum or boolean. Anything else (free text, report wording) is dropped.
+const ALLOWED_VALUES: Record<string, ReadonlySet<string>> = {
+  acquisition_source: new Set(["direct", "linkedin", "github", "x", "search", "other"]),
+  example_label: new Set(["data_review", "meeting_follow_up", "case_monitoring", "onboarding"]),
+  reason: new Set(["missing_description"]),
+  input_confidence: new Set(["low", "medium", "high"]),
+  friction_band: new Set(["low", "medium", "high"]),
+  automation_fit_band: new Set(["low", "medium", "high"]),
+  primary_opportunity: new Set(["named", "none"]),
+  feedback_value: new Set(["yes", "partly", "no"]),
+  feedback_reason: new Set(["clear_next_step", "wrong_priority", "missing_context", "unclear_estimate", "other"]),
+  destination: new Set(["linkedin", "github", "calcom"]),
+  traffic_class: new Set(["verification", "organic"]),
+};
+
+function isAllowedValue(key: string, value: unknown): boolean {
+  if (key === "used_example") return typeof value === "boolean";
+  if (key === "analytics_schema_version") return typeof value === "number" && Number.isInteger(value);
+  return typeof value === "string" && (ALLOWED_VALUES[key]?.has(value) ?? false);
+}
 
 const BLOCKED_AUTOMATIC_PROPERTIES = new Set([
   "$current_url",
@@ -92,7 +115,7 @@ export function sanitizeAnalyticsEvent<T extends AnalyticsEnvelope>(event: T | n
   if (!event || !PRODUCT_EVENTS.includes(event.event as ProductEvent)) return null;
 
   const properties = Object.fromEntries(
-    Object.entries(event.properties ?? {}).filter(([key]) => SAFE_PROPERTY_KEYS.has(key)),
+    Object.entries(event.properties ?? {}).filter(([key, value]) => SAFE_PROPERTY_KEYS.has(key) && isAllowedValue(key, value)),
   );
 
   return { ...event, properties };
