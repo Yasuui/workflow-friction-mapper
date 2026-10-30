@@ -33,15 +33,17 @@ export async function POST(req: Request) {
   const extractPdf = memoize(extractPdfFromDataUrl);
   const material = await collectUserMaterial(messages, extractPdf);
   const demoReply = async () => buildDemoReply(material, intent);
+  const hasFiles = messages.some((message) => message.role === "user" && message.parts.some((part) => part.type === "file"));
+  const sourceMaterial = hasFiles ? material : undefined;
 
   if (!process.env.OPENAI_API_KEY) {
-    return streamAgentReply({ attempts: [], system: "", messages, demoReply });
+    return streamAgentReply({ attempts: [], system: "", messages, demoReply, sourceMaterial });
   }
 
   const admission = admitLive(clientKey(req));
   if (!admission.ok) {
     const notice = LIVE_LIMIT_NOTICE[admission.reason];
-    return streamAgentReply({ attempts: [], system: "", messages, demoReply: async () => `${notice} ${await demoReply()}` });
+    return streamAgentReply({ attempts: [], system: "", messages, demoReply: async () => `${notice} ${await demoReply()}`, sourceMaterial });
   }
 
   const facts = extractFacts(material);
@@ -66,6 +68,7 @@ export async function POST(req: Request) {
     // Only recent turns go to the model: earlier briefs are already summarised in what follows.
     messages: await prepareMessages(messages.slice(-LIVE_HISTORY_MESSAGES), extractPdf),
     demoReply,
+    sourceMaterial,
     abortSignal: AbortSignal.any([req.signal, AbortSignal.timeout(LIVE_TIMEOUT_MS)]),
     onDone: admission.release,
     onModelError: (label, error) => console.error(`[optimize] ${label} failed`, error),

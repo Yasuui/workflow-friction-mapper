@@ -28,6 +28,11 @@ export type AgentStreamOptions = {
   delayMs?: number;
   /** Aborts live attempts: the client disconnecting or the route's timeout. */
   abortSignal?: AbortSignal;
+  /**
+   * The attachment text the server read (decoded files, extracted PDFs). Sent back as a
+   * `data-source` part so the browser can check quotes from attachments it cannot parse itself.
+   */
+  sourceMaterial?: string;
   /** Runs once the stream has fully ended, however it ended. */
   onDone?: () => void;
 };
@@ -64,7 +69,7 @@ async function runAttempts(options: AgentStreamOptions, writer: UIMessageStreamW
     }
     const demo = await options.demoReply();
     const notice = options.attempts.length > 0 ? `${LIVE_FALLBACK_NOTICE} ` : "";
-    await writeText(writer, `${notice}${demo}`, { started, delayMs: options.delayMs ?? 0 });
+    await writeText(writer, `${notice}${demo}`, { started, delayMs: options.delayMs ?? 0, source: options.sourceMaterial });
 }
 
 async function pipeLiveAttempt(
@@ -95,6 +100,7 @@ async function pipeLiveAttempt(
     for await (const chunk of result.toUIMessageStream({ onError: describeError })) {
       if (chunk.type === "error") throw new Error(chunk.errorText);
       if (chunk.type === "start" && started) continue;
+      if (chunk.type === "finish") writeSource(writer, options.sourceMaterial);
       if (!wroteText) {
         pending.push(chunk);
         if (chunk.type !== "text-delta" || !chunk.delta) continue;
@@ -118,7 +124,7 @@ async function pipeLiveAttempt(
 async function writeText(
   writer: UIMessageStreamWriter,
   text: string,
-  { started, delayMs }: { started: boolean; delayMs: number },
+  { started, delayMs, source }: { started: boolean; delayMs: number; source?: string },
 ) {
   const id = "demo-text";
   if (!started) writer.write({ type: "start" });
@@ -131,7 +137,12 @@ async function writeText(
     if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
   writer.write({ type: "text-end", id });
+  writeSource(writer, source);
   writer.write({ type: "finish" });
+}
+
+function writeSource(writer: UIMessageStreamWriter, source: string | undefined) {
+  if (source) writer.write({ type: "data-source", data: { text: source } });
 }
 
 function describeError(error: unknown): string {

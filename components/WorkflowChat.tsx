@@ -48,12 +48,36 @@ function textOf(message: UIMessage): string {
 }
 
 /** The API answers rejected requests with { error }; the transport surfaces that body as the message. */
-// Everything the person typed, used to check that a "fact" in a brief quotes their own material.
+// Everything the person supplied, used to check that a "fact" in a brief quotes their own
+// material: typed text, text attachments decoded here, and attachment text (including PDFs) the
+// server read and returned as a data-source part.
 function userSourceOf(messages: UIMessage[]): string {
-  return messages
-    .filter((message) => message.role === "user")
-    .map(textOf)
-    .join("\n");
+  const chunks: string[] = [];
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (message.role === "user" && part.type === "text") chunks.push(part.text);
+      else if (message.role === "user" && part.type === "file") chunks.push(decodeTextDataUrl(part.url, part.mediaType));
+      else if (part.type === "data-source") chunks.push(readSourcePart(part.data));
+    }
+  }
+  return chunks.filter(Boolean).join("\n");
+}
+
+function readSourcePart(data: unknown): string {
+  const text = (data as { text?: unknown } | null)?.text;
+  return typeof text === "string" ? text : "";
+}
+
+function decodeTextDataUrl(url: string, mediaType: string): string {
+  const match = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(url);
+  if (!match || !/^(text\/|application\/json)/.test(mediaType)) return "";
+  try {
+    if (!match[2]) return decodeURIComponent(match[3]);
+    const bytes = Uint8Array.from(atob(match[3]), (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return "";
+  }
 }
 
 const MODE_LABEL = { live: "Live model", demo: "Rule-based · no AI", unknown: "Engine unknown" } as const;

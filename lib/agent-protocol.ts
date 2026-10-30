@@ -416,22 +416,31 @@ function validHours(value: unknown): number | null {
 function normalizeForMatch(value: string): string {
   return value
     .toLowerCase()
-    .replace(/[“”"'‘’`]/g, "")
-    .replace(/[^a-z0-9%$.,:/ -]+/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[’‘`]/g, "'")
+    .replace(/[^a-z0-9%$']+/g, " ")
     .trim();
 }
 
-/** True when the quote, or most of its words in order, appear in what the person supplied. */
+/**
+ * True only when the quote is a real span of what the person supplied. Case, punctuation and
+ * whitespace may differ, and an ellipsis may mark omitted text, but every remaining segment must
+ * appear verbatim, on word boundaries, in order. Shared words in a different order do not count.
+ */
 export function quoteAppearsIn(quote: string, source: string): boolean {
-  const needle = normalizeForMatch(quote).replace(/[.,:]+$/, "");
-  const haystack = normalizeForMatch(source);
-  if (!needle || !haystack) return false;
-  if (haystack.includes(needle)) return true;
-  const words = needle.split(" ").filter((word) => word.length > 2);
-  if (words.length < 3) return false;
-  const found = words.filter((word) => haystack.includes(word)).length;
-  return found / words.length >= 0.8;
+  const haystack = ` ${normalizeForMatch(source)} `;
+  const segments = quote
+    .split(/…|\.{3}/)
+    .map((segment) => normalizeForMatch(segment))
+    .filter(Boolean);
+  if (!segments.length || haystack.trim() === "") return false;
+  if (segments.join(" ").length < 8) return false;
+  let from = 0;
+  for (const segment of segments) {
+    const at = haystack.indexOf(` ${segment} `, from);
+    if (at === -1) return false;
+    from = at + segment.length + 1;
+  }
+  return true;
 }
 
 /**

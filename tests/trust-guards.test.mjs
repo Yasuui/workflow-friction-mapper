@@ -111,3 +111,12 @@ test("live guard rate-limits a client, caps concurrency and the day", async () =
   delete process.env.LIVE_DAILY_REQUEST_LIMIT;
   resetLiveGuardForTests();
 });
+
+test("grounding needs a verbatim span, not shared words in another order", () => {
+  const source = "We never send invoices before approval; we send invoices after approval.";
+  assert.equal(quoteAppearsIn("We send invoices before approval", source), false);
+  assert.equal(quoteAppearsIn("“we send invoices after approval.”", source), true);
+  assert.equal(quoteAppearsIn("We never send invoices … after approval", source), true);
+  assert.equal(quoteAppearsIn("send invoices after approv", source), false);
+  assert.equal(quoteAppearsIn("Data", "Data is internal."), false);
+});
