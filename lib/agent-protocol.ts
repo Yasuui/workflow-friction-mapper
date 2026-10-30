@@ -413,18 +413,25 @@ function validHours(value: unknown): number | null {
   return Math.round(value * 10) / 10;
 }
 
+// Built with RegExp so Unicode property escapes work under the ES2017 compile target.
+const NON_WORD = new RegExp("[^\\p{L}\\p{N}%$']+", "gu");
+// Scripts written without spaces between words: word boundaries cannot be required there.
+const UNSPACED_SCRIPT = new RegExp("[\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}\\p{Script=Thai}]", "u");
+
 function normalizeForMatch(value: string): string {
   return value
+    .normalize("NFKC")
     .toLowerCase()
     .replace(/[’‘`]/g, "'")
-    .replace(/[^a-z0-9%$']+/g, " ")
+    .replace(NON_WORD, " ")
     .trim();
 }
 
 /**
  * True only when the quote is a real span of what the person supplied. Case, punctuation and
  * whitespace may differ, and an ellipsis may mark omitted text, but every remaining segment must
- * appear verbatim, on word boundaries, in order. Shared words in a different order do not count.
+ * appear verbatim, in order, and on word boundaries in scripts that separate words with spaces.
+ * Shared words in a different order do not count.
  */
 export function quoteAppearsIn(quote: string, source: string): boolean {
   const haystack = ` ${normalizeForMatch(source)} `;
@@ -433,12 +440,15 @@ export function quoteAppearsIn(quote: string, source: string): boolean {
     .map((segment) => normalizeForMatch(segment))
     .filter(Boolean);
   if (!segments.length || haystack.trim() === "") return false;
-  if (segments.join(" ").length < 8) return false;
+  const joined = segments.join(" ");
+  const unspaced = UNSPACED_SCRIPT.test(joined);
+  if (joined.length < (unspaced ? 4 : 8)) return false;
   let from = 0;
   for (const segment of segments) {
-    const at = haystack.indexOf(` ${segment} `, from);
+    const needle = UNSPACED_SCRIPT.test(segment) ? segment : ` ${segment} `;
+    const at = haystack.indexOf(needle, from);
     if (at === -1) return false;
-    from = at + segment.length + 1;
+    from = at + needle.length - (needle.endsWith(" ") ? 1 : 0);
   }
   return true;
 }

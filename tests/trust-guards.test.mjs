@@ -120,3 +120,19 @@ test("grounding needs a verbatim span, not shared words in another order", () =>
   assert.equal(quoteAppearsIn("send invoices after approv", source), false);
   assert.equal(quoteAppearsIn("Data", "Data is internal."), false);
 });
+
+test("quotes in non-Latin scripts are matched, not stripped", () => {
+  assert.equal(quoteAppearsIn("毎日請求書を手作業で確認して送信します", "毎日請求書を手作業で確認して送信します。"), true);
+  assert.equal(quoteAppearsIn("請求書を手作業で確認", "毎日請求書を手作業で確認して送信します。"), true);
+  assert.equal(quoteAppearsIn("請求書を自動で送信", "毎日請求書を手作業で確認して送信します。"), false);
+  assert.equal(quoteAppearsIn("Prüfen Sie die Pflichtfelder", "Wir prüfen die Pflichtfelder. Prüfen Sie die Pflichtfelder täglich."), true);
+  assert.equal(quoteAppearsIn("Prüfen täglich Pflichtfelder", "Prüfen Sie die Pflichtfelder täglich."), false);
+});
+
+test("only explicit automation terms mark a clause as already automated", () => {
+  assert.equal(affirmedText("We manually review automobile insurance claims each morning."), "We manually review automobile insurance claims each morning.");
+  assert.equal(affirmedText("An autograph log is checked daily."), "An autograph log is checked daily.");
+  for (const clause of ["Fields are validated automatically.", "Reminders are automated.", "The CRM auto-assigns each ticket.", "Rows autofill from the form."]) {
+    assert.equal(affirmedText(clause), "", clause);
+  }
+});

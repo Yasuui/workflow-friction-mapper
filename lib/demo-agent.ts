@@ -560,7 +560,7 @@ function detectOpportunities(text: string, steps: string[]): OpportunityItem[] {
 }
 
 const NEGATED = /\b(?:not|no|never|nothing|none|without|don't|doesn't|didn't|isn't|aren't|won't|no longer|stopped|avoid)\b/i;
-const ALREADY_AUTOMATED = /\b(?:automatic(?:ally)?|auto-?\w+|is automated|are automated|the system (?:validates|checks|sends|flags|routes|removes)|handled by the system)\b/i;
+const ALREADY_AUTOMATED = /\b(?:automatic(?:ally)?|automated|auto-?(?:fill|sync|generat|assign|send|remind|import|forward|approv)\w*|the system (?:validates|checks|sends|flags|routes|removes)|handled by the system)\b/i;
 
 /** Clauses the person affirms they do by hand. Negated and already-automated clauses are dropped. */
 export function affirmedText(text: string): string {
