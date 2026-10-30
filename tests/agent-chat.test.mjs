@@ -300,3 +300,13 @@ test("facts and assumptions list each evidence line once, even when the model re
   assert.equal(new Set(all).size, all.length);
   assert.ok(all.length > 0);
 });
+
+test("sample build plan remains explicit about missing details and exports its safety checks", () => {
+  const report = splitAgentOutput(buildDemoReply(WORKFLOW_STARTERS[1].prompt, "improve")).report;
+  assert.ok(report?.buildPlan);
+  assert.match(report.buildPlan.trigger, /needs confirmation/i);
+  const markdown = reportToMarkdown(report);
+  for (const section of ["Automation build plan (proposed)", "Human review", "Failure handling", "Test before launch"]) {
+    assert.ok(markdown.includes(section));
+  }
+});

@@ -8,7 +8,7 @@ const previewRoot = new URL("../app/_sites-preview/", import.meta.url);
 test("pre-renders the workflow agent product shell", async () => {
   const html = await readFile(new URL("../.next/server/app/index.html", import.meta.url), "utf8");
   assert.match(html, /<title>Workflow Friction Mapper/);
-  assert.match(html, /describe the job, paste the steps, or attach a SOP/);
+  assert.match(html, /Turn your workflow into a plan you can build/);
   assert.match(html, /Or try a sample/);
   assert.match(html, /Workflow optimizer/);
   assert.match(html, /Connect on LinkedIn/);
