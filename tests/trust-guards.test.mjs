@@ -136,3 +136,19 @@ test("only explicit automation terms mark a clause as already automated", () => 
     assert.equal(affirmedText(clause), "", clause);
   }
 });
+
+test("data-source provenance stays in the browser and is not resent as history", async () => {
+  const { outboundMessages } = await import("../lib/agent-protocol.ts");
+  const user = { id: "u", role: "user", parts: [{ type: "text", text: "Steps" }] };
+  const reply = {
+    id: "a",
+    role: "assistant",
+    parts: [{ type: "text", text: "Brief" }, { type: "data-source", data: { text: "x".repeat(60_000) } }],
+  };
+  const sent = outboundMessages([user, reply]);
+  assert.equal(sent[0], user);
+  assert.deepEqual(sent[1].parts, [{ type: "text", text: "Brief" }]);
+  assert.equal(reply.parts.length, 2, "browser state keeps the provenance");
+  const chat = readFileSync(new URL("../components/WorkflowChat.tsx", import.meta.url), "utf8");
+  assert.match(chat, /messages:\s*outboundMessages\(messages\)/);
+});

@@ -18,6 +18,7 @@ import {
   briefKicker,
   inferWorkflowIntent,
   intentLine,
+  outboundMessages,
   splitAgentOutput,
   stepIsFriction,
   stripIntentToken,
@@ -32,7 +33,12 @@ import {
 } from "@/lib/product-analytics";
 
 // The intent travels per request in sendMessage's body, so the transport holds no component state.
-const CHAT_TRANSPORT = new DefaultChatTransport({ api: "/api/optimize" });
+const CHAT_TRANSPORT = new DefaultChatTransport({
+  api: "/api/optimize",
+  prepareSendMessagesRequest: ({ id, messages, body, trigger, messageId }) => ({
+    body: { ...body, id, messages: outboundMessages(messages), trigger, messageId },
+  }),
+});
 
 const GREETING_MESSAGE: UIMessage = {
   id: "agent-greeting",

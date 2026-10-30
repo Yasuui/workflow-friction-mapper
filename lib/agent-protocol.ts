@@ -454,6 +454,19 @@ export function quoteAppearsIn(quote: string, source: string): boolean {
 }
 
 /**
+ * History as sent to the API. Data parts (such as the data-source provenance the server returns)
+ * stay in browser state for grounding but are never resent: they would repeat the full
+ * attachment text on every turn and push valid conversations past the request-size limit.
+ */
+export function outboundMessages<M extends { parts: ReadonlyArray<{ type: string }> }>(messages: M[]): M[] {
+  return messages.map((message) =>
+    message.parts.some((part) => part.type.startsWith("data-"))
+      ? { ...message, parts: message.parts.filter((part) => !part.type.startsWith("data-")) }
+      : message,
+  );
+}
+
+/**
  * Checks every "fact" against the person's own material. A fact whose quote cannot be found
  * there is downgraded to an inference, so a model (or a rule) cannot make a claim look sourced.
  */
