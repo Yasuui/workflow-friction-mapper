@@ -137,6 +137,14 @@ export function buildDemoReply(material: string, intentHint?: WorkflowIntent | n
     ],
     missing,
     question,
+    buildPlan: {
+      trigger: `Needs confirmation: what starts “${usableSteps[0]}”?`,
+      inputs: "Needs confirmation: identify the source, required fields, and data permissions.",
+      steps: usableSteps.map((step) => `Review whether to automate: ${step}`),
+      approval: "Choose which decisions and external actions need a person to approve them.",
+      failure: "Define the retry, duplicate handling, and how an owner is alerted before enabling.",
+      tests: ["Run a synthetic example end to end and compare each outcome with the current process.", "Try missing input, a duplicate, and a failed step; check that no unintended action occurs."],
+    },
     hours: {
       annualManual: annual,
       basis: annual != null ? `${facts.minutesPerRun} minutes × ${facts.runsPerWeek} runs/week × 52` : null,

@@ -420,7 +420,7 @@ export function WorkflowChat() {
                 <section className="empty-state" aria-labelledby="empty-title">
                   <div className="empty-head">
                     <span className="empty-eyebrow"><StickerAgent mood="idle" size="sm" />{PRODUCT_SHORT_NAME} is ready</span>
-                    <h1 id="empty-title">Find the friction before you automate.</h1>
+                    <h1 id="empty-title">Turn your workflow into a plan you can build.</h1>
                     <p>{AGENT_GREETING}</p>
                   </div>
                   <div className="intent-picker">
@@ -595,7 +595,7 @@ export function WorkflowChat() {
               </form>
               {error ? <p className="form-error" role="alert">{error}</p> : null}
               <div className={`composer-meta ${hasUser ? "is-quiet" : ""}`}>
-                <p className="attach-hint">{ATTACH_HINT}</p>
+                <p className="attach-hint">{mode === "live" ? "Your input is sent to OpenAI. Avoid sharing sensitive data. " : "Sample mode: review and complete the plan before building. "}{ATTACH_HINT}</p>
                 <span className="kbd-hint" aria-hidden="true"><kbd>Enter</kbd> send <kbd>/</kbd> focus</span>
               </div>
             </div>
