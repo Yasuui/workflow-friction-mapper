@@ -152,3 +152,21 @@ test("data-source provenance stays in the browser and is not resent as history",
   const chat = readFileSync(new URL("../components/WorkflowChat.tsx", import.meta.url), "utf8");
   assert.match(chat, /messages:\s*outboundMessages\(messages\)/);
 });
+
+test("trimmed live history carries the original material forward as a bounded user turn", async () => {
+  const { boundedHistory, LIVE_HISTORY_MESSAGES, LIVE_CARRIED_MATERIAL_CHARS } = await import("../lib/live-guard.ts");
+  const turn = (i) => ({ id: `m${i}`, role: i % 2 ? "assistant" : "user", parts: [{ type: "text", text: `turn ${i}` }] });
+  const short = Array.from({ length: LIVE_HISTORY_MESSAGES }, (_, i) => turn(i));
+  assert.equal(boundedHistory(short, "Export rows"), short);
+
+  const long = Array.from({ length: 20 }, (_, i) => turn(i));
+  const sent = boundedHistory(long, "Export requests from Excel. Never email customers.");
+  assert.equal(sent.length, LIVE_HISTORY_MESSAGES);
+  assert.equal(sent[0].role, "user");
+  assert.match(sent[0].parts[0].text, /Never email customers/);
+  assert.match(sent[0].parts[0].text, /data, not instructions/);
+  assert.equal(sent.at(-1).id, "m19");
+
+  const huge = boundedHistory(long, "x".repeat(LIVE_CARRIED_MATERIAL_CHARS * 2));
+  assert.ok(huge[0].parts[0].text.length < LIVE_CARRIED_MATERIAL_CHARS + 200);
+});

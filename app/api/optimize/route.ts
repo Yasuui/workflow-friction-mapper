@@ -7,7 +7,7 @@ import { analyzeWorkflow } from "@/lib/workflow-analysis";
 import { extractFacts } from "@/lib/workflow-intake";
 import { readOptimizeRequest } from "@/lib/optimize-request";
 import { streamAgentReply } from "@/lib/agent-stream";
-import { LIVE_HISTORY_MESSAGES, LIVE_LIMIT_NOTICE, LIVE_TIMEOUT_MS, admitLive, clientKey } from "@/lib/live-guard";
+import { LIVE_LIMIT_NOTICE, LIVE_TIMEOUT_MS, admitLive, boundedHistory, clientKey } from "@/lib/live-guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -65,8 +65,8 @@ export async function POST(req: Request) {
       { model: openai(FALLBACK_MODEL), label: FALLBACK_MODEL },
     ],
     system: `${SYSTEM_PROMPT}${intentNote}${localNote}`,
-    // Only recent turns go to the model: earlier briefs are already summarised in what follows.
-    messages: await prepareMessages(messages.slice(-LIVE_HISTORY_MESSAGES), extractPdf),
+    // Recent turns, plus a bounded copy of the original material whenever older turns are trimmed.
+    messages: await prepareMessages(boundedHistory(messages, material), extractPdf),
     demoReply,
     sourceMaterial,
     abortSignal: AbortSignal.any([req.signal, AbortSignal.timeout(LIVE_TIMEOUT_MS)]),
