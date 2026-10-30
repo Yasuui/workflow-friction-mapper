@@ -170,3 +170,15 @@ test("trimmed live history carries the original material forward as a bounded us
   const huge = boundedHistory(long, "x".repeat(LIVE_CARRIED_MATERIAL_CHARS * 2));
   assert.ok(huge[0].parts[0].text.length < LIVE_CARRIED_MATERIAL_CHARS + 200);
 });
+
+test("create mode keeps requested automation steps as requirements", () => {
+  const text =
+    "Create a workflow for our weekly meeting. Automatically capture notes in Teams. Automatically extract action items with owners. Automatically send reminders before due dates. Automatically escalate overdue tasks to the lead.";
+  const { report } = splitAgentOutput(buildDemoReply(text, "create"), text);
+  const all = [...report.steps, ...report.proposedSteps].join(" ").toLowerCase();
+  for (const requirement of ["capture notes", "action items", "reminders", "escalate overdue"]) {
+    assert.ok(all.includes(requirement), requirement);
+  }
+  const improve = splitAgentOutput(buildDemoReply(text, "improve"), text).report;
+  assert.doesNotMatch(improve.steps.join(" ").toLowerCase(), /escalate overdue/);
+});

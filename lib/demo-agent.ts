@@ -78,8 +78,9 @@ export function buildDemoReply(material: string, intentHint?: WorkflowIntent | n
 
   const intent = intentHint ?? token ?? inferWorkflowIntent(text);
   // Rules only see what the person says they actually do. "We do not use spreadsheets" or
-  // "the system validates fields automatically" must not trigger a spreadsheet fix.
-  const affirmed = affirmedText(text);
+  // "the system validates fields automatically" must not trigger a spreadsheet fix. When creating
+  // a workflow, "automatically send reminders" is a requirement, so the full text is kept.
+  const affirmed = intent === "create" ? text : affirmedText(text);
   if (intent !== "create" && !hasSupportedSignal(affirmed)) {
     return noSupportedImprovement(text, affirmed, intent);
   }
