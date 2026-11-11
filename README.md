@@ -33,9 +33,9 @@ Teams often automate a process before they understand it. This agent is the firs
 1. **Land in chat.** The agent greets you. Paste a process, attach a SOP/notes file, or tap a starter.
 2. **Read what you share.** Text, Markdown, CSV, JSON, and PDF text go to the optimizer. Images go to the live model when a key is present.
 3. **Get a brief in the thread.** Spoken summary plus a structured report card. Claims are facts from your material or labeled inferences — no invented hours or tools.
-4. **Take it with you.** Copy, download Markdown (`workflow-optimization-brief.md`), or download PDF (`workflow-optimization-brief.pdf`).
+4. **Take it with you.** Copy, download Markdown (`workflow-optimization-brief.md`), PDF (`workflow-optimization-brief.pdf`), or an inert **n8n workflow scaffold** (`workflow-scaffold.n8n.json`): one placeholder node per plan step, named by what it does, with notes for review, failure handling and launch tests. Example: [`docs/n8n/example-data-review.n8n.json`](docs/n8n/example-data-review.n8n.json).
 
-Without `OPENAI_API_KEY` the UI runs in **demo mode** (a polished streamed sample grounded in what you typed). With a key, `/api/optimize` uses **gpt-5-mini** (`MODEL`, fallback `gpt-4.1-mini`).
+Without a model key the UI runs in **demo mode** (the rule-based agent, grounded in what you typed). With `OPENAI_API_KEY`, `/api/optimize` uses **gpt-5-mini** (`MODEL`, fallback `gpt-4.1-mini`). Set `LLM_BASE_URL`, `LLM_API_KEY` and `MODEL` to use any OpenAI-compatible endpoint instead, including free and low-cost models. See [`.env.example`](.env.example) and [`lib/model-provider.ts`](lib/model-provider.ts).
 
 The tool does not replace process owners, security review, or measured validation.
 
@@ -106,6 +106,11 @@ What the tests cover:
 - **Rendering and export.** The pre-rendered shell, file names, SEO routes and the data-URL download path.
 
 Not covered yet: live-model output quality, browser end-to-end tests, and mobile layouts on physical devices.
+
+## Design and audit
+
+- [Design system](docs/design-system.md): tokens, type, components, layout and the accessibility checklist.
+- [Audit, November 2026](docs/audit-2026-11.md): UX findings and fixes, output reliability plan, cost options and security.
 
 ## Product architecture
 

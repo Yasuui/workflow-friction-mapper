@@ -1,6 +1,7 @@
 import type { UIMessage } from "ai";
 import { extractSteps } from "./workflow-analysis.ts";
 import { extractFacts } from "./workflow-intake.ts";
+import { STEP_KIND_LABEL, classifyStep } from "./n8n-export.ts";
 import {
   inferWorkflowIntent,
   parseIntentToken,
@@ -140,8 +141,10 @@ export function buildDemoReply(material: string, intentHint?: WorkflowIntent | n
     buildPlan: {
       trigger: `Needs confirmation: what starts “${usableSteps[0]}”?`,
       inputs: "Needs confirmation: identify the source, required fields, and data permissions.",
-      steps: usableSteps.map((step) => `Review whether to automate: ${step}`),
-      approval: "Choose which decisions and external actions need a person to approve them.",
+      steps: usableSteps.map((step) => `${STEP_KIND_LABEL[classifyStep(step)]}: ${step}`),
+      approval: usableSteps.some((step) => classifyStep(step) === "review")
+        ? `Keep a person on: ${usableSteps.filter((step) => classifyStep(step) === "review").join("; ")}.`
+        : "Needs confirmation: no approval step was described. Name who signs off before anything leaves the team.",
       failure: "Define the retry, duplicate handling, and how an owner is alerted before enabling.",
       tests: ["Run a synthetic example end to end and compare each outcome with the current process.", "Try missing input, a duplicate, and a failed step; check that no unintended action occurs."],
     },

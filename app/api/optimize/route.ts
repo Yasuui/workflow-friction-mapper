@@ -1,5 +1,4 @@
 import type { UIMessage } from "ai";
-import { openai } from "@ai-sdk/openai";
 import { parseWorkflowIntent, SYSTEM_PROMPT } from "@/lib/agent-protocol";
 import { buildDemoReply, collectUserMaterial, readMaterialIntent } from "@/lib/demo-agent";
 import { extractPdfFromDataUrl, isPdfPart } from "@/lib/pdf-text";
@@ -7,19 +6,20 @@ import { analyzeWorkflow } from "@/lib/workflow-analysis";
 import { extractFacts } from "@/lib/workflow-intake";
 import { readOptimizeRequest } from "@/lib/optimize-request";
 import { streamAgentReply } from "@/lib/agent-stream";
+import { liveConfig } from "@/lib/model-provider";
 import { LIVE_LIMIT_NOTICE, LIVE_TIMEOUT_MS, admitLive, boundedHistory, clientKey } from "@/lib/live-guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const LIVE_MODEL = process.env.MODEL || "gpt-5-mini";
-const FALLBACK_MODEL = "gpt-4.1-mini";
+// Default OpenAI path: OPENAI_API_KEY with gpt-5-mini, falling back to gpt-4.1-mini.
+// LLM_BASE_URL + LLM_API_KEY + MODEL switch to any OpenAI-compatible (free or cheap) endpoint.
+// See lib/model-provider.ts.
 
 export async function GET() {
-  return Response.json({
-    mode: process.env.OPENAI_API_KEY ? "live" : "demo",
-    model: LIVE_MODEL,
-  });
+  const config = liveConfig();
+  // The mode is public so the UI can label the engine; the model and provider stay server-side.
+  return Response.json({ mode: config.mode }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(req: Request) {
@@ -36,7 +36,8 @@ export async function POST(req: Request) {
   const hasFiles = messages.some((message) => message.role === "user" && message.parts.some((part) => part.type === "file"));
   const sourceMaterial = hasFiles ? material : undefined;
 
-  if (!process.env.OPENAI_API_KEY) {
+  const config = liveConfig();
+  if (config.mode === "demo") {
     return streamAgentReply({ attempts: [], system: "", messages, demoReply, sourceMaterial });
   }
 
@@ -60,10 +61,7 @@ export async function POST(req: Request) {
   const intentNote = ` Active intent: ${parseWorkflowIntent(intent) ?? "improve"}.`;
 
   return streamAgentReply({
-    attempts: [
-      { model: openai(LIVE_MODEL), label: LIVE_MODEL },
-      { model: openai(FALLBACK_MODEL), label: FALLBACK_MODEL },
-    ],
+    attempts: config.attempts(),
     system: `${SYSTEM_PROMPT}${intentNote}${localNote}`,
     // Recent turns, plus a bounded copy of the original material whenever older turns are trimmed.
     messages: await prepareMessages(boundedHistory(messages, material), extractPdf),

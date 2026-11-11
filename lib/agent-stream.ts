@@ -17,7 +17,12 @@ import {
  * cannot be replaced cleanly, so it ends the turn with an error the chat shows.
  */
 
-export type LiveAttempt = { model: LanguageModel; label: string };
+export type LiveAttempt = {
+  model: LanguageModel;
+  label: string;
+  /** Provider-specific options, sent only to the provider that understands them. */
+  providerOptions?: Record<string, Record<string, string | number | boolean>>;
+};
 
 export type AgentStreamOptions = {
   attempts: LiveAttempt[];
@@ -89,7 +94,7 @@ async function pipeLiveAttempt(
       // One retry per model keeps the worst case (both models down) to a few seconds before the demo.
       maxRetries: 1,
       abortSignal: options.abortSignal,
-      providerOptions: { openai: { reasoningEffort: "low" } },
+      providerOptions: attempt.providerOptions,
       onError: () => {
         // Reported through the error chunk below; avoids a duplicate unhandled log.
       },

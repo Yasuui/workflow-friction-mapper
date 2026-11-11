@@ -37,7 +37,7 @@ function bytesFromBody(body: string, encoding: "utf8" | "base64"): Uint8Array {
 export async function saveNamedFile(body: string, filename: string, encoding: "utf8" | "base64" = "utf8") {
   const bytes = bytesFromBody(body, encoding);
   const blob = new Blob([bytes as BlobPart], { type: "application/octet-stream" });
-  const ext = filename.toLowerCase().endsWith(".pdf") ? ".pdf" : ".md";
+  const ext = /\.(pdf|json|md)$/i.exec(filename)?.[0].toLowerCase() ?? ".md";
   const picker = (window as unknown as { showSaveFilePicker?: SavePicker }).showSaveFilePicker;
 
   if (typeof picker === "function") {

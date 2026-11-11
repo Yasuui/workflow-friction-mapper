@@ -76,7 +76,13 @@ const demoReply = async () => "Demo brief.";
 test("streams the live model's text and asks for enough output tokens for the brief", async () => {
   const model = textModel("Possible friction at intake. ```workflow-report\n{}\n```");
   const message = await finalMessage(
-    streamAgentReply({ attempts: [{ model, label: "primary" }], system: "s", messages: [user], demoReply, delayMs: 0 }),
+    streamAgentReply({
+      attempts: [{ model, label: "primary", providerOptions: { openai: { reasoningEffort: "low" } } }],
+      system: "s",
+      messages: [user],
+      demoReply,
+      delayMs: 0,
+    }),
   );
   assert.equal(textOf(message), "Possible friction at intake. ```workflow-report\n{}\n```");
   assert.equal(model.doStreamCalls[0].maxOutputTokens, LIVE_MAX_OUTPUT_TOKENS);
