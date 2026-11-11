@@ -19,6 +19,12 @@ test("steps are classified by what they do, not left as 'review whether to autom
   assert.equal(classifyStep("Export requests from Excel"), "fetch");
   assert.equal(classifyStep("Escalate overdue actions to the project lead"), "review");
   assert.equal(classifyStep("Think about it"), "manual");
+  // The action decides, not words in its object or a participle used as a modifier.
+  assert.equal(classifyStep("Email the approved invoice to the customer"), "notify");
+  assert.equal(classifyStep("Record the email in the spreadsheet"), "write");
+  assert.equal(classifyStep("Then we send the reviewed draft to legal"), "notify");
+  assert.equal(classifyStep("A new IT case enters the queue"), "fetch");
+  assert.equal(classifyStep("The manager approves the request"), "review");
 
   for (const [index, starter] of WORKFLOW_STARTERS.entries()) {
     const plan = starterReport(index).buildPlan;

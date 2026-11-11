@@ -11,14 +11,29 @@ import type { AgentReport } from "./agent-protocol.ts";
 
 export type StepKind = "fetch" | "validate" | "route" | "notify" | "write" | "review" | "manual";
 
+// The action is the step's leading verb: "Email the approved invoice" notifies, it does not
+// review, and "Record the email" writes, it does not notify. Words later in the sentence only
+// decide when the step does not open with a known verb ("A new case enters the queue").
+const VERB_KIND: Array<[StepKind, RegExp]> = [
+  ["review", /^(approve|review|confirm|decide|escalate|sign)\b/],
+  ["validate", /^(check|validate|verify|dedupe|deduplicate|clean|compare|reconcile|remove|match|test)\b/],
+  ["notify", /^(send|notify|remind|email|message|alert|ping|tell|inform|share|reply)\b/],
+  ["route", /^(assign|route|triage|prioriti[sz]e|forward|hand|delegate|allocate)\b/],
+  ["fetch", /^(export|import|download|pull|collect|receive|gather|open|read|extract|fetch|get|scan)\b/],
+  ["write", /^(add|update|create|record|log|move|close|file|save|write|post|enter|fill|upload|archive|mark|set)\b/],
+];
+
+// Fallback scan. Past participles used as modifiers ("approved", "reviewed", "sent") are not actions.
 const KIND_RULES: Array<[StepKind, RegExp]> = [
-  ["review", /\b(approve|approval|sign[- ]?off|confirm|review|decide|escalat)/i],
+  ["review", /\b(approve(?!d)|approval|sign[- ]?off|confirm(?!ed)|review(?!ed)|decide|escalat(?!ed))/i],
   ["validate", /\b(check|validat|verify|dedup|duplicate|required field|clean|compare|reconcil)/i],
-  ["notify", /\b(send|notify|remind|email|message|alert|ping|teams|slack)/i],
+  ["notify", /\b(send(?!t)|notify|remind|email|message|alert|ping)/i],
   ["route", /\b(assign|route|triage|priorit|forward|hand ?off)/i],
   ["fetch", /\b(export|import|download|pull|collect|receive|arrive|enter|open|read|extract)/i],
   ["write", /\b(add|update|create|record|log|move|close|file|save|write|post)/i],
 ];
+
+const LEAD_FILLER = /^(?:(?:then|and|next|finally|first|we|i|they|you|please|someone|the team|the owner|manually|also)\b[\s,]*)+/;
 
 export const STEP_KIND_LABEL: Record<StepKind, string> = {
   fetch: "Fetch",
@@ -42,6 +57,8 @@ const KIND_HINT: Record<StepKind, string> = {
 };
 
 export function classifyStep(step: string): StepKind {
+  const lead = step.trim().toLowerCase().replace(/^\d+[.)]\s*/, "").replace(LEAD_FILLER, "");
+  for (const [kind, verb] of VERB_KIND) if (verb.test(lead)) return kind;
   for (const [kind, rule] of KIND_RULES) if (rule.test(step)) return kind;
   return "manual";
 }
