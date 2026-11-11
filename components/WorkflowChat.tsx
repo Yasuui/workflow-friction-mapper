@@ -25,7 +25,7 @@ import {
   type AgentReport,
   type WorkflowIntent,
 } from "@/lib/agent-protocol";
-import { ATTACH_HINT, FILE_ACCEPT, MAX_FILES, attachmentBudgetError, filesToChatParts } from "@/lib/chat-attachments";
+import { ATTACH_HINT, ATTACH_SHORT_HINT, FILE_ACCEPT, MAX_FILES, attachmentBudgetError, filesToChatParts } from "@/lib/chat-attachments";
 import {
   acquisitionSource,
   captureProductEvent,
@@ -87,6 +87,7 @@ function decodeTextDataUrl(url: string, mediaType: string): string {
 }
 
 const MODE_LABEL = { live: "Live model", demo: "Rule-based · no AI", unknown: "Engine unknown" } as const;
+const MODE_SHORT = { live: "Live", demo: "Rules", unknown: "…" } as const;
 const MODE_HINT = {
   live: "Replies come from the live model, then are checked against what you shared",
   demo: "Replies are deterministic rules grounded in what you share. No AI call, and images cannot be read",
@@ -380,7 +381,7 @@ export function WorkflowChat() {
   const thread = messages.filter((message) => message.id !== GREETING_MESSAGE.id);
   const selectedIntent = WORKFLOW_INTENTS.find((item) => item.id === intent);
   const placeholder = hasUser
-    ? "Refine the workflow or add context…"
+    ? "Refine or add context…"
     : selectedIntent?.placeholder ?? "When a request arrives, we…";
 
   return (
@@ -397,7 +398,8 @@ export function WorkflowChat() {
         <div className="chrome-actions">
           <span className={`mode-badge is-${mode}`} title={MODE_HINT[mode]}>
             <i aria-hidden="true" />
-            {MODE_LABEL[mode]}
+            <span className="label-long">{MODE_LABEL[mode]}</span>
+            <span className="label-short" aria-hidden="true">{MODE_SHORT[mode]}</span>
           </span>
           {canvasReport ? (
             <button type="button" className="ghost-button is-outlined canvas-toggle" onClick={() => setMobileCanvasOpen(true)}>
@@ -407,7 +409,7 @@ export function WorkflowChat() {
           ) : null}
           <button type="button" className="ghost-button is-outlined" onClick={reset}>
             <PlusIcon />
-            New analysis
+            <span className="label-collapse">New analysis</span>
           </button>
         </div>
       </header>
@@ -551,7 +553,7 @@ export function WorkflowChat() {
                   </ul>
                 ) : null}
                 <div className="composer-row">
-                  <label className="attach-button" title="Attach a file">
+                  <label className="attach-button" title={ATTACH_HINT}>
                     <span className="sr-only">Attach a file</span>
                     <input
                       ref={fileRef}
@@ -595,7 +597,10 @@ export function WorkflowChat() {
               </form>
               {error ? <p className="form-error" role="alert">{error}</p> : null}
               <div className={`composer-meta ${hasUser ? "is-quiet" : ""}`}>
-                <p className="attach-hint">{mode === "live" ? "Your input is sent to OpenAI. Avoid sharing sensitive data. " : "Sample mode: review and complete the plan before building. "}{ATTACH_HINT}</p>
+                <p className="attach-hint" title={ATTACH_HINT}>
+                  <span className="hint-mode">{mode === "live" ? "Sent to the model provider. Leave out personal or secret data. " : "Rule-based mode, no AI call. "}</span>
+                  {ATTACH_SHORT_HINT}
+                </p>
                 <span className="kbd-hint" aria-hidden="true"><kbd>Enter</kbd> send <kbd>/</kbd> focus</span>
               </div>
             </div>

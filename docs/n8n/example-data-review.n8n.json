@@ -1,0 +1,172 @@
+{
+  "name": "Optimization brief: Data review sample",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Start manually (replace with real trigger)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {},
+      "notes": "Needs confirmation: what starts “Export requests from Excel”?",
+      "notesInFlow": true
+    },
+    {
+      "id": "step-1",
+      "name": "1. Fetch · Export requests from Excel",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {},
+      "notes": "Export requests from Excel\n\nReplace with the source node (spreadsheet, form, inbox, HTTP Request).",
+      "notesInFlow": true
+    },
+    {
+      "id": "step-2",
+      "name": "2. Validate · Check required fields and remove duplicates",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {},
+      "notes": "Check required fields and remove duplicates\n\nReplace with an IF or Code node that checks the rule, plus a branch for failures.",
+      "notesInFlow": true
+    },
+    {
+      "id": "step-3",
+      "name": "3. Notify · Send incomplete rows back to the owner",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {},
+      "notes": "Send incomplete rows back to the owner\n\nReplace with the messaging node your team already uses.",
+      "notesInFlow": true
+    },
+    {
+      "id": "step-4",
+      "name": "4. Write · Add valid requests to the case queue",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        0
+      ],
+      "parameters": {},
+      "notes": "Add valid requests to the case queue\n\nReplace with the node that writes to the system of record.",
+      "notesInFlow": true
+    },
+    {
+      "id": "Read me",
+      "name": "Read me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -360
+      ],
+      "parameters": {
+        "content": "## Optimization brief: Data review sample\n\nProposed, not running. Every step is a placeholder (No Operation) so importing this sends nothing.\n\n**Inputs:** Needs confirmation: identify the source, required fields, and data permissions.\n\n**Human review:** Needs confirmation: no approval step was described. Name who signs off before anything leaves the team.\n\n**First move:** Add a Status column plus a duplicate flag on the export sheet. Example: Status flags a blank Owner or a duplicate Request ID (COUNTIF on the ID column).",
+        "width": 1300,
+        "height": 300,
+        "color": 4
+      }
+    },
+    {
+      "id": "Failure handling",
+      "name": "Failure handling",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        180
+      ],
+      "parameters": {
+        "content": "## Failure handling\nDefine the retry, duplicate handling, and how an owner is alerted before enabling.\n\nSet an Error Workflow in this workflow's settings before activating.",
+        "width": 420,
+        "height": 240,
+        "color": 3
+      }
+    },
+    {
+      "id": "Test before launch",
+      "name": "Test before launch",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        420,
+        180
+      ],
+      "parameters": {
+        "content": "## Test before launch\n- Run a synthetic example end to end and compare each outcome with the current process.\n- Try missing input, a duplicate, and a failed step; check that no unintended action occurs.",
+        "width": 460,
+        "height": 240,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Start manually (replace with real trigger)": {
+      "main": [
+        [
+          {
+            "node": "1. Fetch · Export requests from Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Fetch · Export requests from Excel": {
+      "main": [
+        [
+          {
+            "node": "2. Validate · Check required fields and remove duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Validate · Check required fields and remove duplicates": {
+      "main": [
+        [
+          {
+            "node": "3. Notify · Send incomplete rows back to the owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Notify · Send incomplete rows back to the owner": {
+      "main": [
+        [
+          {
+            "node": "4. Write · Add valid requests to the case queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "generatedBy": "workflow-friction-mapper"
+  }
+}

@@ -4,6 +4,8 @@ export const FILE_ACCEPT = ".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.gif,.webp,
 export const MAX_FILES = 5;
 export const ATTACH_HINT =
   "Attach a SOP PDF, process notes (.txt / .md), a CSV export, or a screenshot of the queue/sheet. Excel: export CSV. Word and Excel files (.docx / .xlsx) are not read.";
+/** The visible line under the composer; the full ATTACH_HINT is the tooltip and the attach button title. */
+export const ATTACH_SHORT_HINT = "Attach PDF, TXT, MD, CSV, JSON or an image, up to 2.5 MB. Word and Excel files are not read: export to PDF or CSV.";
 const MAX_TEXT_BYTES = 400_000;
 /** Base64 adds a third, so 2.5 MB of PDF or image stays under the API's 4 MB request limit. */
 export const MAX_BINARY_BYTES = 2_500_000;

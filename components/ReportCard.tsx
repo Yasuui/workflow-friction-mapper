@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  BRIEF_N8N_FILENAME,
   briefKicker,
   reportMeaning,
   type AgentReport,
@@ -16,7 +17,8 @@ import {
   stepIsFriction,
   stripKindPrefix,
 } from "@/lib/agent-protocol";
-import { downloadBriefMarkdown, downloadBriefPdf } from "@/lib/brief-export";
+import { downloadBriefMarkdown, downloadBriefPdf, saveNamedFile } from "@/lib/brief-export";
+import { reportToN8n } from "@/lib/n8n-export";
 import { captureProductEvent, resultContextFromAgent, type FeedbackReason } from "@/lib/product-analytics";
 
 const FEEDBACK_REASON: Record<"yes" | "partly" | "no", FeedbackReason> = {
@@ -25,7 +27,7 @@ const FEEDBACK_REASON: Record<"yes" | "partly" | "no", FeedbackReason> = {
   no: "wrong_priority",
 };
 
-type SectionId = "overview" | "actions" | "workflow" | "evidence";
+type SectionId = "overview" | "plan" | "actions" | "workflow" | "evidence";
 type EvidenceFilter = "all" | EvidenceKind;
 
 function KindPill({ kind }: { kind: EvidenceKind }) {
@@ -70,7 +72,7 @@ export function ReportCard({ report, source, usedExample }: { report: AgentRepor
   const scrollRef = useRef<HTMLDivElement>(null);
   const context = resultContextFromAgent(report);
   const { facts, assumptions } = factsAndAssumptions(report);
-  const subtitle = report.steps[0] ? `${report.steps[0]} · updated just now` : "updated just now";
+  const subtitle = workflowTitle(report);
   const meaning = reportMeaning(report);
   const doThis = report.doThis.length
     ? report.doThis
@@ -99,6 +101,7 @@ export function ReportCard({ report, source, usedExample }: { report: AgentRepor
     [...report.friction, ...report.bottlenecks].filter((item) => item.kind === kind).length;
 
   const sections: Array<{ id: SectionId; label: string; count?: number }> = [{ id: "overview", label: "Overview" }];
+  sections.push({ id: "plan", label: "Build plan", count: report.buildPlan?.steps.length || undefined });
   if (doThis.length || report.automations.length) sections.push({ id: "actions", label: "Actions", count: doThis.length + report.automations.length });
   if (workflowSteps.length) sections.push({ id: "workflow", label: workflowLabel, count: workflowSteps.length });
   if (issueCount || evidenceTotal) sections.push({ id: "evidence", label: "Evidence", count: issueCount });
@@ -148,6 +151,12 @@ export function ReportCard({ report, source, usedExample }: { report: AgentRepor
     captureProductEvent("report_downloaded", context);
   }
 
+  function downloadN8n() {
+    const workflow = reportToN8n(report, `${briefKicker(report.intent)}: ${subtitle}`);
+    void saveNamedFile(JSON.stringify(workflow, null, 2), BRIEF_N8N_FILENAME, "utf8");
+    captureProductEvent("report_downloaded", context);
+  }
+
   function submitFeedback(value: "yes" | "partly" | "no") {
     if (feedbackSent) return;
     setFeedbackValue(value);
@@ -164,8 +173,8 @@ export function ReportCard({ report, source, usedExample }: { report: AgentRepor
       <header className="report-card-head">
         <div className="report-title-row">
           <div className="report-title">
-            <h2>Automation plan</h2>
-            <p className="report-kicker">{subtitle} · Proposed, not running</p>
+            <h2>{briefKicker(report.intent)}</h2>
+            <p className="report-kicker"><span className="report-subject">{subtitle}</span> · Proposed, not running</p>
           </div>
           <div className="results-actions" role="group" aria-label="Brief tools">
             <button type="button" onClick={copyBrief} aria-live="polite">
@@ -179,6 +188,10 @@ export function ReportCard({ report, source, usedExample }: { report: AgentRepor
             <button type="button" onClick={downloadPdf} aria-label="Download as PDF">
               <FileDownIcon />
               .pdf
+            </button>
+            <button type="button" onClick={downloadN8n} aria-label="Download an n8n workflow scaffold" title="Inert n8n scaffold: placeholders only, nothing runs on import">
+              <FlowIcon />
+              n8n
             </button>
           </div>
         </div>
@@ -199,34 +212,6 @@ export function ReportCard({ report, source, usedExample }: { report: AgentRepor
 
       <div className="report-scroll" ref={scrollRef} onScroll={onScroll}>
         <div className="report-inner">
-          {report.buildPlan ? (
-            <section className="build-plan" aria-label="Automation build plan">
-              <p className="plan-intro">Review the details before building. Confirm anything marked as missing.</p>
-              {[
-                ["Trigger", report.buildPlan.trigger || "Needs confirmation"],
-                ["Inputs", report.buildPlan.inputs || "Needs confirmation"],
-                ["Human review", report.buildPlan.approval || "Needs confirmation"],
-                ["Failure handling", report.buildPlan.failure || "Needs confirmation"],
-              ].slice(0, 2).map(([label, value], index) => (
-                <div className="plan-row" key={label}>
-                  <div className="plan-row-title"><span className="plan-number">{String(index + 1).padStart(2, "0")}</span><h2>{label}</h2></div><p>{value}</p>
-                </div>
-              ))}
-              <div className="plan-row">
-                <div className="plan-row-title"><span className="plan-number">03</span><h2>Steps</h2></div>
-                <ol>{report.buildPlan.steps.length ? report.buildPlan.steps.map((step, index) => <li key={`${step}-${index}`}>{step}</li>) : <li>Needs confirmation</li>}</ol>
-              </div>
-              {[["Human review", report.buildPlan.approval], ["Failure handling", report.buildPlan.failure]].map(([label, value], index) => (
-                <div className="plan-row" key={label}>
-                  <div className="plan-row-title"><span className="plan-number">{String(index + 4).padStart(2, "0")}</span><h2>{label}</h2></div><p>{value || "Needs confirmation"}</p>
-                </div>
-              ))}
-              <div className="plan-row">
-                <div className="plan-row-title"><span className="plan-number">06</span><h2>Test before launch</h2></div>
-                <ul>{report.buildPlan.tests.length ? report.buildPlan.tests.map((test, index) => <li key={`${test}-${index}`}>{test}</li>) : <li>Needs confirmation</li>}</ul>
-              </div>
-            </section>
-          ) : <p className="plan-notice">This response does not include a build plan. Ask Mapper to add a trigger, inputs, review steps and failure handling.</p>}
           <section className="brief-section" id="brief-overview" aria-label="Overview">
             <div className={`first-move ${abstained ? "is-abstained" : ""}`}>
               <span className="panel-label">{abstained ? "No supported improvement yet" : "Recommended move"}</span>
@@ -278,6 +263,36 @@ export function ReportCard({ report, source, usedExample }: { report: AgentRepor
                 </ol>
               </div>
             ) : null}
+          </section>
+
+          <section className="brief-section" id="brief-plan" aria-labelledby="plan-title">
+            <div className="section-head">
+              <h3 className="panel-label" id="plan-title">Build plan</h3>
+              <span className="section-note">Confirm anything marked “Needs confirmation” before building</span>
+            </div>
+            {report.buildPlan ? (
+              <ol className="build-plan">
+                {planRows(report.buildPlan).map((row, index) => (
+                  <li className="plan-row" key={row.label}>
+                    <div className="plan-row-title">
+                      <span className="plan-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                      <h4>{row.label}</h4>
+                    </div>
+                    {Array.isArray(row.value) ? (
+                      <ul className={row.numbered ? "is-numbered" : undefined}>
+                        {row.value.length
+                          ? row.value.map((item, itemIndex) => <li key={`${item}-${itemIndex}`}><PlanText text={item} /></li>)
+                          : <li><PlanText text="Needs confirmation" /></li>}
+                      </ul>
+                    ) : (
+                      <p><PlanText text={row.value || "Needs confirmation"} /></p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="plan-notice">This reply has no build plan yet. Ask Mapper to add a trigger, inputs, review steps and failure handling.</p>
+            )}
           </section>
 
           {doThis.length > 0 || report.automations.length > 0 ? (
@@ -451,6 +466,46 @@ export function ReportCard({ report, source, usedExample }: { report: AgentRepor
       </aside>
       <span hidden>{usedExample ? "example" : "custom"}</span>
     </section>
+  );
+}
+
+function workflowTitle(report: AgentReport): string {
+  const first = (report.intent === "create" ? report.proposedSteps[0] : report.steps[0]) ?? report.steps[0] ?? "";
+  return first ? first.replace(/[.;:]+$/, "") : "Your workflow";
+}
+
+function planRows(plan: NonNullable<AgentReport["buildPlan"]>): Array<{ label: string; value: string | string[]; numbered?: boolean }> {
+  return [
+    { label: "Trigger", value: plan.trigger },
+    { label: "Inputs", value: plan.inputs },
+    { label: "Steps", value: plan.steps, numbered: true },
+    { label: "Human review", value: plan.approval },
+    { label: "Failure handling", value: plan.failure },
+    { label: "Test before launch", value: plan.tests },
+  ];
+}
+
+// "Needs confirmation" is the one thing a reader must act on, so it is marked, not buried.
+// A leading "Kind:" label (Validate, Notify…) becomes a small tag.
+function PlanText({ text }: { text: string }) {
+  const pending = /^needs confirmation\b:?\s*/i.exec(text);
+  if (pending) {
+    const rest = text.slice(pending[0].length);
+    return <><span className="needs-tag">Needs confirmation</span>{rest ? ` ${rest}` : null}</>;
+  }
+  const kind = /^(Fetch|Validate|Route|Notify|Write|Human review|Manual):\s*/.exec(text);
+  if (kind) return <><span className={`kind-tag is-${kind[1].toLowerCase().replace(" ", "-")}`}>{kind[1]}</span>{text.slice(kind[0].length)}</>;
+  return <>{text}</>;
+}
+
+function FlowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="5" cy="12" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="19" cy="6" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="19" cy="18" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M7.2 12h4.3M11.5 12c0-4 2.5-6 5.3-6M11.5 12c0 4 2.5 6 5.3 6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
   );
 }
 

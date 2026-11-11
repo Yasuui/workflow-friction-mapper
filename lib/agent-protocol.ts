@@ -3,6 +3,7 @@ export const PRODUCT_SHORT_NAME = "Mapper";
 export const PRODUCT_LINE = "Workflow optimizer";
 export const BRIEF_MARKDOWN_FILENAME = "workflow-optimization-brief.md";
 export const BRIEF_PDF_FILENAME = "workflow-optimization-brief.pdf";
+export const BRIEF_N8N_FILENAME = "workflow-scaffold.n8n.json";
 
 export type WorkflowIntent = "create" | "improve" | "diagnose";
 
